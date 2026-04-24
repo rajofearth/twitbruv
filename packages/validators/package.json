@@ -1,0 +1,23 @@
+{
+  "name": "@workspace/validators",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./users": "./src/users.ts",
+    "./auth": "./src/auth.ts",
+    "./posts": "./src/posts.ts",
+    "./articles": "./src/articles.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@workspace/config-tsconfig": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

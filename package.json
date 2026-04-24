@@ -7,7 +7,11 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "format": "turbo format",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "db:push": "bun run --cwd packages/db push",
+    "db:studio": "bun run --cwd packages/db studio",
+    "services:up": "docker compose up -d",
+    "services:down": "docker compose down"
   },
   "devDependencies": {
     "prettier": "^3.8.1",

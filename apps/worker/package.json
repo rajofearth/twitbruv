@@ -1,0 +1,24 @@
+{
+  "name": "worker",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --env-file=../../.env --watch src/index.ts",
+    "start": "bun run --env-file=../../.env src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@workspace/db": "workspace:*",
+    "@workspace/email": "workspace:*",
+    "@workspace/media": "workspace:*",
+    "pg-boss": "^10.3.2",
+    "pino": "^9.6.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^25.1.0",
+    "@workspace/config-tsconfig": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

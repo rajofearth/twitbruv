@@ -1,0 +1,554 @@
+import { Hono } from 'hono'
+import { and, asc, desc, eq, inArray, isNull, lt, sql } from '@workspace/db'
+import { schema } from '@workspace/db'
+import { createPostSchema, editPostSchema } from '@workspace/validators'
+import { requireAuth, type HonoEnv } from '../middleware/session.ts'
+import { toPostDto } from '../lib/post-dto.ts'
+import { loadViewerFlags } from '../lib/viewer-flags.ts'
+import { loadPostMedia } from '../lib/post-media.ts'
+import { loadArticleCards } from '../lib/article-cards.ts'
+import { linkHashtags } from '../lib/hashtags.ts'
+import { homeFeedCacheKey } from './feed.ts'
+
+export const postsRoute = new Hono<HonoEnv>()
+
+const EDIT_WINDOW_MS = 5 * 60 * 1000
+
+// Create a post (top-level, reply, or quote).
+postsRoute.post('/', requireAuth(), async (c) => {
+  const session = c.get('session')!
+  const { db, cache } = c.get('ctx')
+  const body = createPostSchema.parse(await c.req.json())
+
+  if (body.replyToId && body.quoteOfId) {
+    return c.json({ error: 'invalid_combo', message: 'reply and quote are mutually exclusive' }, 400)
+  }
+
+  const result = await db.transaction(async (tx) => {
+    let replyToId: string | null = null
+    let rootId: string | null = null
+    let depth = 0
+
+    if (body.replyToId) {
+      const [parent] = await tx
+        .select()
+        .from(schema.posts)
+        .where(and(eq(schema.posts.id, body.replyToId), isNull(schema.posts.deletedAt)))
+        .limit(1)
+      if (!parent) throw new HttpError(404, 'reply_target_not_found')
+
+      replyToId = parent.id
+      rootId = parent.rootId ?? parent.id
+      depth = parent.conversationDepth + 1
+
+      await tx
+        .update(schema.posts)
+        .set({ replyCount: sql`${schema.posts.replyCount} + 1` })
+        .where(eq(schema.posts.id, parent.id))
+    }
+
+    let quoteOfId: string | null = null
+    if (body.quoteOfId) {
+      const [target] = await tx
+        .select({ id: schema.posts.id })
+        .from(schema.posts)
+        .where(and(eq(schema.posts.id, body.quoteOfId), isNull(schema.posts.deletedAt)))
+        .limit(1)
+      if (!target) throw new HttpError(404, 'quote_target_not_found')
+      quoteOfId = target.id
+      await tx
+        .update(schema.posts)
+        .set({ quoteCount: sql`${schema.posts.quoteCount} + 1` })
+        .where(eq(schema.posts.id, target.id))
+    }
+
+    const [post] = await tx
+      .insert(schema.posts)
+      .values({
+        authorId: session.user.id,
+        text: body.text,
+        lang: body.lang,
+        replyToId,
+        rootId,
+        quoteOfId,
+        conversationDepth: depth,
+        visibility: body.visibility,
+        replyRestriction: body.replyRestriction,
+        sensitive: body.sensitive,
+        contentWarning: body.contentWarning,
+      })
+      .returning()
+    if (!post) throw new HttpError(500, 'insert_failed')
+
+    if (body.mediaIds && body.mediaIds.length > 0) {
+      const ownedMedia = await tx
+        .select({ id: schema.media.id })
+        .from(schema.media)
+        .where(
+          and(
+            inArray(schema.media.id, body.mediaIds),
+            eq(schema.media.ownerId, session.user.id),
+          ),
+        )
+      const ownedSet = new Set(ownedMedia.map((m) => m.id))
+      const invalid = body.mediaIds.filter((id) => !ownedSet.has(id))
+      if (invalid.length > 0) throw new HttpError(400, 'invalid_media_ids')
+
+      await tx.insert(schema.postMedia).values(
+        body.mediaIds.map((mediaId, position) => ({
+          postId: post.id,
+          mediaId,
+          position,
+        })),
+      )
+    }
+
+    await linkHashtags(tx, post.id, post.text)
+
+    const [author] = await tx.select().from(schema.users).where(eq(schema.users.id, post.authorId)).limit(1)
+    if (!author) throw new HttpError(500, 'author_missing')
+
+    return { post, author }
+  })
+
+  // Invalidate the author's cached home feed so their own new post shows up on refresh.
+  await cache.del(homeFeedCacheKey(session.user.id))
+
+  const [mediaMap, articleMap] = await Promise.all([
+    loadPostMedia(db, [result.post.id]),
+    loadArticleCards(db, [result.post.id]),
+  ])
+  return c.json(
+    {
+      post: toPostDto(
+        result.post,
+        result.author,
+        { liked: false, bookmarked: false, reposted: false },
+        mediaMap.get(result.post.id),
+        c.get('ctx').mediaEnv,
+        articleMap.get(result.post.id),
+      ),
+    },
+    201,
+  )
+})
+
+// Repost (creates a posts row with repostOfId set, empty text).
+postsRoute.post('/:id/repost', requireAuth(), async (c) => {
+  const session = c.get('session')!
+  const { db } = c.get('ctx')
+  const id = c.req.param('id')
+
+  await db.transaction(async (tx) => {
+    const [target] = await tx
+      .select()
+      .from(schema.posts)
+      .where(and(eq(schema.posts.id, id), isNull(schema.posts.deletedAt)))
+      .limit(1)
+    if (!target) throw new HttpError(404, 'not_found')
+
+    const [existing] = await tx
+      .select({ id: schema.posts.id })
+      .from(schema.posts)
+      .where(
+        and(
+          eq(schema.posts.authorId, session.user.id),
+          eq(schema.posts.repostOfId, target.id),
+          isNull(schema.posts.deletedAt),
+        ),
+      )
+      .limit(1)
+    if (existing) return
+
+    await tx.insert(schema.posts).values({
+      authorId: session.user.id,
+      text: '',
+      repostOfId: target.id,
+    })
+
+    await tx
+      .update(schema.posts)
+      .set({ repostCount: sql`${schema.posts.repostCount} + 1` })
+      .where(eq(schema.posts.id, target.id))
+  })
+
+  return c.json({ ok: true })
+})
+
+postsRoute.delete('/:id/repost', requireAuth(), async (c) => {
+  const session = c.get('session')!
+  const { db } = c.get('ctx')
+  const id = c.req.param('id')
+
+  await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(schema.posts)
+      .where(
+        and(
+          eq(schema.posts.authorId, session.user.id),
+          eq(schema.posts.repostOfId, id),
+          isNull(schema.posts.deletedAt),
+        ),
+      )
+      .limit(1)
+    if (!existing) return
+    await tx.update(schema.posts).set({ deletedAt: new Date() }).where(eq(schema.posts.id, existing.id))
+    await tx
+      .update(schema.posts)
+      .set({ repostCount: sql`GREATEST(${schema.posts.repostCount} - 1, 0)` })
+      .where(eq(schema.posts.id, id))
+  })
+
+  return c.json({ ok: true })
+})
+
+// Like / unlike.
+postsRoute.post('/:id/like', requireAuth(), async (c) => {
+  const session = c.get('session')!
+  const { db } = c.get('ctx')
+  const id = c.req.param('id')
+
+  await db.transaction(async (tx) => {
+    const inserted = await tx
+      .insert(schema.likes)
+      .values({ userId: session.user.id, postId: id })
+      .onConflictDoNothing()
+      .returning({ postId: schema.likes.postId })
+    if (inserted.length > 0) {
+      await tx
+        .update(schema.posts)
+        .set({ likeCount: sql`${schema.posts.likeCount} + 1` })
+        .where(eq(schema.posts.id, id))
+    }
+  })
+
+  return c.json({ ok: true })
+})
+
+postsRoute.delete('/:id/like', requireAuth(), async (c) => {
+  const session = c.get('session')!
+  const { db } = c.get('ctx')
+  const id = c.req.param('id')
+
+  await db.transaction(async (tx) => {
+    const deleted = await tx
+      .delete(schema.likes)
+      .where(and(eq(schema.likes.userId, session.user.id), eq(schema.likes.postId, id)))
+      .returning({ postId: schema.likes.postId })
+    if (deleted.length > 0) {
+      await tx
+        .update(schema.posts)
+        .set({ likeCount: sql`GREATEST(${schema.posts.likeCount} - 1, 0)` })
+        .where(eq(schema.posts.id, id))
+    }
+  })
+
+  return c.json({ ok: true })
+})
+
+// Bookmark / unbookmark.
+postsRoute.post('/:id/bookmark', requireAuth(), async (c) => {
+  const session = c.get('session')!
+  const { db } = c.get('ctx')
+  const id = c.req.param('id')
+
+  await db.transaction(async (tx) => {
+    const inserted = await tx
+      .insert(schema.bookmarks)
+      .values({ userId: session.user.id, postId: id })
+      .onConflictDoNothing()
+      .returning({ postId: schema.bookmarks.postId })
+    if (inserted.length > 0) {
+      await tx
+        .update(schema.posts)
+        .set({ bookmarkCount: sql`${schema.posts.bookmarkCount} + 1` })
+        .where(eq(schema.posts.id, id))
+    }
+  })
+
+  return c.json({ ok: true })
+})
+
+postsRoute.delete('/:id/bookmark', requireAuth(), async (c) => {
+  const session = c.get('session')!
+  const { db } = c.get('ctx')
+  const id = c.req.param('id')
+
+  await db.transaction(async (tx) => {
+    const deleted = await tx
+      .delete(schema.bookmarks)
+      .where(and(eq(schema.bookmarks.userId, session.user.id), eq(schema.bookmarks.postId, id)))
+      .returning({ postId: schema.bookmarks.postId })
+    if (deleted.length > 0) {
+      await tx
+        .update(schema.posts)
+        .set({ bookmarkCount: sql`GREATEST(${schema.posts.bookmarkCount} - 1, 0)` })
+        .where(eq(schema.posts.id, id))
+    }
+  })
+
+  return c.json({ ok: true })
+})
+
+// Thread: ancestors + target + immediate replies.
+postsRoute.get('/:id/thread', async (c) => {
+  const { db } = c.get('ctx')
+  const viewerId = c.get('session')?.user.id
+  const id = c.req.param('id')
+
+  const [target] = await db
+    .select()
+    .from(schema.posts)
+    .where(and(eq(schema.posts.id, id), isNull(schema.posts.deletedAt)))
+    .limit(1)
+  if (!target) return c.json({ error: 'not_found' }, 404)
+
+  // Walk ancestors from replyToId up the chain. Bounded.
+  const ancestorIds: Array<string> = []
+  let cursorId: string | null = target.replyToId
+  for (let i = 0; i < 30 && cursorId; i++) {
+    const [row] = await db
+      .select({ id: schema.posts.id, replyToId: schema.posts.replyToId })
+      .from(schema.posts)
+      .where(eq(schema.posts.id, cursorId))
+      .limit(1)
+    if (!row) break
+    ancestorIds.unshift(row.id)
+    cursorId = row.replyToId
+  }
+
+  const ancestorRows = ancestorIds.length
+    ? await db
+        .select({ post: schema.posts, author: schema.users })
+        .from(schema.posts)
+        .innerJoin(schema.users, eq(schema.users.id, schema.posts.authorId))
+        .where(and(inArray(schema.posts.id, ancestorIds), isNull(schema.posts.deletedAt)))
+    : []
+
+  const [targetWithAuthor] = await db
+    .select({ post: schema.posts, author: schema.users })
+    .from(schema.posts)
+    .innerJoin(schema.users, eq(schema.users.id, schema.posts.authorId))
+    .where(eq(schema.posts.id, target.id))
+    .limit(1)
+
+  const replies = await db
+    .select({ post: schema.posts, author: schema.users })
+    .from(schema.posts)
+    .innerJoin(schema.users, eq(schema.users.id, schema.posts.authorId))
+    .where(and(eq(schema.posts.replyToId, target.id), isNull(schema.posts.deletedAt)))
+    .orderBy(asc(schema.posts.createdAt))
+    .limit(100)
+
+  const allIds = [...ancestorRows.map((r) => r.post.id), target.id, ...replies.map((r) => r.post.id)]
+  const [flags, mediaMap, articleMap] = await Promise.all([
+    loadViewerFlags(db, viewerId, allIds),
+    loadPostMedia(db, allIds),
+    loadArticleCards(db, allIds),
+  ])
+  const env = c.get('ctx').mediaEnv
+
+  const byId = new Map(ancestorRows.map((r) => [r.post.id, r]))
+  const orderedAncestors = ancestorIds.map((i) => byId.get(i)!).filter(Boolean)
+
+  return c.json({
+    ancestors: orderedAncestors.map((r) =>
+      toPostDto(
+        r.post,
+        r.author,
+        flags.get(r.post.id),
+        mediaMap.get(r.post.id),
+        env,
+        articleMap.get(r.post.id),
+      ),
+    ),
+    post: targetWithAuthor
+      ? toPostDto(
+          targetWithAuthor.post,
+          targetWithAuthor.author,
+          flags.get(target.id),
+          mediaMap.get(target.id),
+          env,
+          articleMap.get(target.id),
+        )
+      : null,
+    replies: replies.map((r) =>
+      toPostDto(
+        r.post,
+        r.author,
+        flags.get(r.post.id),
+        mediaMap.get(r.post.id),
+        env,
+        articleMap.get(r.post.id),
+      ),
+    ),
+  })
+})
+
+// Fetch a single post.
+postsRoute.get('/:id', async (c) => {
+  const { db, mediaEnv } = c.get('ctx')
+  const viewerId = c.get('session')?.user.id
+  const id = c.req.param('id')
+  const rows = await db
+    .select({ post: schema.posts, author: schema.users })
+    .from(schema.posts)
+    .innerJoin(schema.users, eq(schema.users.id, schema.posts.authorId))
+    .where(and(eq(schema.posts.id, id), isNull(schema.posts.deletedAt)))
+    .limit(1)
+  const row = rows[0]
+  if (!row) return c.json({ error: 'not_found' }, 404)
+  const [flags, mediaMap, articleMap] = await Promise.all([
+    loadViewerFlags(db, viewerId, [row.post.id]),
+    loadPostMedia(db, [row.post.id]),
+    loadArticleCards(db, [row.post.id]),
+  ])
+  return c.json({
+    post: toPostDto(
+      row.post,
+      row.author,
+      flags.get(row.post.id),
+      mediaMap.get(row.post.id),
+      mediaEnv,
+      articleMap.get(row.post.id),
+    ),
+  })
+})
+
+// Edit (within 5 min of creation).
+postsRoute.patch('/:id', requireAuth(), async (c) => {
+  const session = c.get('session')!
+  const { db } = c.get('ctx')
+  const id = c.req.param('id')
+  const body = editPostSchema.parse(await c.req.json())
+
+  const result = await db.transaction(async (tx) => {
+    const [post] = await tx.select().from(schema.posts).where(eq(schema.posts.id, id)).limit(1)
+    if (!post || post.deletedAt) throw new HttpError(404, 'not_found')
+    if (post.authorId !== session.user.id) throw new HttpError(403, 'forbidden')
+    const ageMs = Date.now() - post.createdAt.getTime()
+    if (ageMs > EDIT_WINDOW_MS) throw new HttpError(409, 'edit_window_expired')
+    if (post.text === body.text) return { post, unchanged: true as const }
+
+    await tx.insert(schema.postEdits).values({
+      postId: post.id,
+      previousText: post.text,
+      editedBy: session.user.id,
+    })
+
+    const [updated] = await tx
+      .update(schema.posts)
+      .set({ text: body.text, editedAt: new Date() })
+      .where(eq(schema.posts.id, post.id))
+      .returning()
+    return { post: updated!, unchanged: false as const }
+  })
+
+  const [author] = await db.select().from(schema.users).where(eq(schema.users.id, result.post.authorId)).limit(1)
+  const [flags, mediaMap, articleMap] = await Promise.all([
+    loadViewerFlags(db, session.user.id, [result.post.id]),
+    loadPostMedia(db, [result.post.id]),
+    loadArticleCards(db, [result.post.id]),
+  ])
+  return c.json({
+    post: toPostDto(
+      result.post,
+      author!,
+      flags.get(result.post.id),
+      mediaMap.get(result.post.id),
+      c.get('ctx').mediaEnv,
+      articleMap.get(result.post.id),
+    ),
+  })
+})
+
+// Soft delete (author only). Decrements parent counters.
+postsRoute.delete('/:id', requireAuth(), async (c) => {
+  const session = c.get('session')!
+  const { db, cache } = c.get('ctx')
+  const id = c.req.param('id')
+
+  await db.transaction(async (tx) => {
+    const [post] = await tx.select().from(schema.posts).where(eq(schema.posts.id, id)).limit(1)
+    if (!post || post.deletedAt) throw new HttpError(404, 'not_found')
+    if (post.authorId !== session.user.id) throw new HttpError(403, 'forbidden')
+
+    await tx.update(schema.posts).set({ deletedAt: new Date() }).where(eq(schema.posts.id, post.id))
+
+    if (post.replyToId) {
+      await tx
+        .update(schema.posts)
+        .set({ replyCount: sql`GREATEST(${schema.posts.replyCount} - 1, 0)` })
+        .where(eq(schema.posts.id, post.replyToId))
+    }
+    if (post.quoteOfId) {
+      await tx
+        .update(schema.posts)
+        .set({ quoteCount: sql`GREATEST(${schema.posts.quoteCount} - 1, 0)` })
+        .where(eq(schema.posts.id, post.quoteOfId))
+    }
+    if (post.repostOfId) {
+      await tx
+        .update(schema.posts)
+        .set({ repostCount: sql`GREATEST(${schema.posts.repostCount} - 1, 0)` })
+        .where(eq(schema.posts.id, post.repostOfId))
+    }
+  })
+
+  await cache.del(homeFeedCacheKey(session.user.id))
+  return c.json({ ok: true })
+})
+
+// Global public timeline.
+postsRoute.get('/', async (c) => {
+  const { db, mediaEnv } = c.get('ctx')
+  const viewerId = c.get('session')?.user.id
+  const limit = Math.min(Number(c.req.query('limit') ?? 40), 100)
+  const cursor = c.req.query('cursor')
+
+  const rows = await db
+    .select({ post: schema.posts, author: schema.users })
+    .from(schema.posts)
+    .innerJoin(schema.users, eq(schema.users.id, schema.posts.authorId))
+    .where(
+      and(
+        isNull(schema.posts.deletedAt),
+        eq(schema.posts.visibility, 'public'),
+        cursor ? lt(schema.posts.createdAt, new Date(cursor)) : undefined,
+      ),
+    )
+    .orderBy(desc(schema.posts.createdAt))
+    .limit(limit)
+
+  const ids = rows.map((r) => r.post.id)
+  const [flags, mediaMap, articleMap] = await Promise.all([
+    loadViewerFlags(db, viewerId, ids),
+    loadPostMedia(db, ids),
+    loadArticleCards(db, ids),
+  ])
+  const posts = rows.map((r) =>
+    toPostDto(
+      r.post,
+      r.author,
+      flags.get(r.post.id),
+      mediaMap.get(r.post.id),
+      mediaEnv,
+      articleMap.get(r.post.id),
+    ),
+  )
+  const nextCursor = posts.length === limit ? posts[posts.length - 1]!.createdAt : null
+  return c.json({ posts, nextCursor })
+})
+
+class HttpError extends Error {
+  constructor(public status: number, public code: string) {
+    super(code)
+  }
+}
+
+postsRoute.onError((err, c) => {
+  if (err instanceof HttpError) return c.json({ error: err.code }, err.status as never)
+  console.error(err)
+  return c.json({ error: 'internal_error', message: err.message }, 500)
+})

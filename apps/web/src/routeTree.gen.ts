@@ -8,59 +8,364 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from "./routes/__root"
-import { Route as IndexRouteImport } from "./routes/index"
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignupRouteImport } from './routes/signup'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SearchRouteImport } from './routes/search'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as BookmarksRouteImport } from './routes/bookmarks'
+import { Route as HandleRouteImport } from './routes/$handle'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as HandleIndexRouteImport } from './routes/$handle.index'
+import { Route as HashtagTagRouteImport } from './routes/hashtag.$tag'
+import { Route as ArticlesNewRouteImport } from './routes/articles.new'
+import { Route as HandleFollowingRouteImport } from './routes/$handle.following'
+import { Route as HandleFollowersRouteImport } from './routes/$handle.followers'
+import { Route as ArticlesIdEditRouteImport } from './routes/articles.$id.edit'
+import { Route as HandlePIdRouteImport } from './routes/$handle.p.$id'
+import { Route as HandleASlugRouteImport } from './routes/$handle.a.$slug'
 
-const IndexRoute = IndexRouteImport.update({
-  id: "/",
-  path: "/",
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
   getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BookmarksRoute = BookmarksRouteImport.update({
+  id: '/bookmarks',
+  path: '/bookmarks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HandleRoute = HandleRouteImport.update({
+  id: '/$handle',
+  path: '/$handle',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HandleIndexRoute = HandleIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => HandleRoute,
+} as any)
+const HashtagTagRoute = HashtagTagRouteImport.update({
+  id: '/hashtag/$tag',
+  path: '/hashtag/$tag',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ArticlesNewRoute = ArticlesNewRouteImport.update({
+  id: '/articles/new',
+  path: '/articles/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HandleFollowingRoute = HandleFollowingRouteImport.update({
+  id: '/following',
+  path: '/following',
+  getParentRoute: () => HandleRoute,
+} as any)
+const HandleFollowersRoute = HandleFollowersRouteImport.update({
+  id: '/followers',
+  path: '/followers',
+  getParentRoute: () => HandleRoute,
+} as any)
+const ArticlesIdEditRoute = ArticlesIdEditRouteImport.update({
+  id: '/articles/$id/edit',
+  path: '/articles/$id/edit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HandlePIdRoute = HandlePIdRouteImport.update({
+  id: '/p/$id',
+  path: '/p/$id',
+  getParentRoute: () => HandleRoute,
+} as any)
+const HandleASlugRoute = HandleASlugRouteImport.update({
+  id: '/a/$slug',
+  path: '/a/$slug',
+  getParentRoute: () => HandleRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof IndexRoute
+  '/': typeof IndexRoute
+  '/$handle': typeof HandleRouteWithChildren
+  '/bookmarks': typeof BookmarksRoute
+  '/login': typeof LoginRoute
+  '/search': typeof SearchRoute
+  '/settings': typeof SettingsRoute
+  '/signup': typeof SignupRoute
+  '/$handle/followers': typeof HandleFollowersRoute
+  '/$handle/following': typeof HandleFollowingRoute
+  '/articles/new': typeof ArticlesNewRoute
+  '/hashtag/$tag': typeof HashtagTagRoute
+  '/$handle/': typeof HandleIndexRoute
+  '/$handle/a/$slug': typeof HandleASlugRoute
+  '/$handle/p/$id': typeof HandlePIdRoute
+  '/articles/$id/edit': typeof ArticlesIdEditRoute
 }
 export interface FileRoutesByTo {
-  "/": typeof IndexRoute
+  '/': typeof IndexRoute
+  '/bookmarks': typeof BookmarksRoute
+  '/login': typeof LoginRoute
+  '/search': typeof SearchRoute
+  '/settings': typeof SettingsRoute
+  '/signup': typeof SignupRoute
+  '/$handle/followers': typeof HandleFollowersRoute
+  '/$handle/following': typeof HandleFollowingRoute
+  '/articles/new': typeof ArticlesNewRoute
+  '/hashtag/$tag': typeof HashtagTagRoute
+  '/$handle': typeof HandleIndexRoute
+  '/$handle/a/$slug': typeof HandleASlugRoute
+  '/$handle/p/$id': typeof HandlePIdRoute
+  '/articles/$id/edit': typeof ArticlesIdEditRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  "/": typeof IndexRoute
+  '/': typeof IndexRoute
+  '/$handle': typeof HandleRouteWithChildren
+  '/bookmarks': typeof BookmarksRoute
+  '/login': typeof LoginRoute
+  '/search': typeof SearchRoute
+  '/settings': typeof SettingsRoute
+  '/signup': typeof SignupRoute
+  '/$handle/followers': typeof HandleFollowersRoute
+  '/$handle/following': typeof HandleFollowingRoute
+  '/articles/new': typeof ArticlesNewRoute
+  '/hashtag/$tag': typeof HashtagTagRoute
+  '/$handle/': typeof HandleIndexRoute
+  '/$handle/a/$slug': typeof HandleASlugRoute
+  '/$handle/p/$id': typeof HandlePIdRoute
+  '/articles/$id/edit': typeof ArticlesIdEditRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: "/"
+  fullPaths:
+    | '/'
+    | '/$handle'
+    | '/bookmarks'
+    | '/login'
+    | '/search'
+    | '/settings'
+    | '/signup'
+    | '/$handle/followers'
+    | '/$handle/following'
+    | '/articles/new'
+    | '/hashtag/$tag'
+    | '/$handle/'
+    | '/$handle/a/$slug'
+    | '/$handle/p/$id'
+    | '/articles/$id/edit'
   fileRoutesByTo: FileRoutesByTo
-  to: "/"
-  id: "__root__" | "/"
+  to:
+    | '/'
+    | '/bookmarks'
+    | '/login'
+    | '/search'
+    | '/settings'
+    | '/signup'
+    | '/$handle/followers'
+    | '/$handle/following'
+    | '/articles/new'
+    | '/hashtag/$tag'
+    | '/$handle'
+    | '/$handle/a/$slug'
+    | '/$handle/p/$id'
+    | '/articles/$id/edit'
+  id:
+    | '__root__'
+    | '/'
+    | '/$handle'
+    | '/bookmarks'
+    | '/login'
+    | '/search'
+    | '/settings'
+    | '/signup'
+    | '/$handle/followers'
+    | '/$handle/following'
+    | '/articles/new'
+    | '/hashtag/$tag'
+    | '/$handle/'
+    | '/$handle/a/$slug'
+    | '/$handle/p/$id'
+    | '/articles/$id/edit'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  HandleRoute: typeof HandleRouteWithChildren
+  BookmarksRoute: typeof BookmarksRoute
+  LoginRoute: typeof LoginRoute
+  SearchRoute: typeof SearchRoute
+  SettingsRoute: typeof SettingsRoute
+  SignupRoute: typeof SignupRoute
+  ArticlesNewRoute: typeof ArticlesNewRoute
+  HashtagTagRoute: typeof HashtagTagRoute
+  ArticlesIdEditRoute: typeof ArticlesIdEditRoute
 }
 
-declare module "@tanstack/react-router" {
+declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    "/": {
-      id: "/"
-      path: "/"
-      fullPath: "/"
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bookmarks': {
+      id: '/bookmarks'
+      path: '/bookmarks'
+      fullPath: '/bookmarks'
+      preLoaderRoute: typeof BookmarksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$handle': {
+      id: '/$handle'
+      path: '/$handle'
+      fullPath: '/$handle'
+      preLoaderRoute: typeof HandleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/$handle/': {
+      id: '/$handle/'
+      path: '/'
+      fullPath: '/$handle/'
+      preLoaderRoute: typeof HandleIndexRouteImport
+      parentRoute: typeof HandleRoute
+    }
+    '/hashtag/$tag': {
+      id: '/hashtag/$tag'
+      path: '/hashtag/$tag'
+      fullPath: '/hashtag/$tag'
+      preLoaderRoute: typeof HashtagTagRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/articles/new': {
+      id: '/articles/new'
+      path: '/articles/new'
+      fullPath: '/articles/new'
+      preLoaderRoute: typeof ArticlesNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$handle/following': {
+      id: '/$handle/following'
+      path: '/following'
+      fullPath: '/$handle/following'
+      preLoaderRoute: typeof HandleFollowingRouteImport
+      parentRoute: typeof HandleRoute
+    }
+    '/$handle/followers': {
+      id: '/$handle/followers'
+      path: '/followers'
+      fullPath: '/$handle/followers'
+      preLoaderRoute: typeof HandleFollowersRouteImport
+      parentRoute: typeof HandleRoute
+    }
+    '/articles/$id/edit': {
+      id: '/articles/$id/edit'
+      path: '/articles/$id/edit'
+      fullPath: '/articles/$id/edit'
+      preLoaderRoute: typeof ArticlesIdEditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$handle/p/$id': {
+      id: '/$handle/p/$id'
+      path: '/p/$id'
+      fullPath: '/$handle/p/$id'
+      preLoaderRoute: typeof HandlePIdRouteImport
+      parentRoute: typeof HandleRoute
+    }
+    '/$handle/a/$slug': {
+      id: '/$handle/a/$slug'
+      path: '/a/$slug'
+      fullPath: '/$handle/a/$slug'
+      preLoaderRoute: typeof HandleASlugRouteImport
+      parentRoute: typeof HandleRoute
     }
   }
 }
 
+interface HandleRouteChildren {
+  HandleFollowersRoute: typeof HandleFollowersRoute
+  HandleFollowingRoute: typeof HandleFollowingRoute
+  HandleIndexRoute: typeof HandleIndexRoute
+  HandleASlugRoute: typeof HandleASlugRoute
+  HandlePIdRoute: typeof HandlePIdRoute
+}
+
+const HandleRouteChildren: HandleRouteChildren = {
+  HandleFollowersRoute: HandleFollowersRoute,
+  HandleFollowingRoute: HandleFollowingRoute,
+  HandleIndexRoute: HandleIndexRoute,
+  HandleASlugRoute: HandleASlugRoute,
+  HandlePIdRoute: HandlePIdRoute,
+}
+
+const HandleRouteWithChildren =
+  HandleRoute._addFileChildren(HandleRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  HandleRoute: HandleRouteWithChildren,
+  BookmarksRoute: BookmarksRoute,
+  LoginRoute: LoginRoute,
+  SearchRoute: SearchRoute,
+  SettingsRoute: SettingsRoute,
+  SignupRoute: SignupRoute,
+  ArticlesNewRoute: ArticlesNewRoute,
+  HashtagTagRoute: HashtagTagRoute,
+  ArticlesIdEditRoute: ArticlesIdEditRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
 
-import type { getRouter } from "./router.tsx"
-import type { createStart } from "@tanstack/react-start"
-declare module "@tanstack/react-start" {
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>

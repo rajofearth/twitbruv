@@ -1,0 +1,28 @@
+{
+  "name": "@workspace/media",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./s3": "./src/s3.ts",
+    "./sharp": "./src/sharp.ts",
+    "./env": "./src/env.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.737.0",
+    "@aws-sdk/s3-request-presigner": "^3.737.0",
+    "blurhash": "^2.0.5",
+    "file-type": "^20.0.0",
+    "sharp": "^0.33.5",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^25.1.0",
+    "@workspace/config-tsconfig": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

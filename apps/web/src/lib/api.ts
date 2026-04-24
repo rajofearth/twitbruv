@@ -1,0 +1,297 @@
+import { API_URL } from "./env"
+
+export class ApiError extends Error {
+  constructor(public status: number, public code: string, message: string) {
+    super(message)
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+    ...init,
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "unknown" }))
+    throw new ApiError(res.status, body.error ?? "unknown", body.message ?? res.statusText)
+  }
+  return (await res.json()) as T
+}
+
+const h = (handle: string) => handle.replace(/^@/, "")
+const qs = (cursor?: string) => (cursor ? `?cursor=${encodeURIComponent(cursor)}` : "")
+
+export const api = {
+  me: () => request<{ user: SelfUser }>("/api/me"),
+  updateMe: (body: Partial<SelfUser>) =>
+    request<{ user: SelfUser }>("/api/me", { method: "PATCH", body: JSON.stringify(body) }),
+  claimHandle: (handle: string) =>
+    request<{ user: SelfUser }>("/api/me/handle", { method: "POST", body: JSON.stringify({ handle }) }),
+
+  user: (handle: string) => request<{ user: PublicProfile }>(`/api/users/${h(handle)}`),
+  userPosts: (handle: string, cursor?: string) =>
+    request<FeedPage>(`/api/users/${h(handle)}/posts${qs(cursor)}`),
+  followers: (handle: string, cursor?: string) =>
+    request<UserListPage>(`/api/users/${h(handle)}/followers${qs(cursor)}`),
+  following: (handle: string, cursor?: string) =>
+    request<UserListPage>(`/api/users/${h(handle)}/following${qs(cursor)}`),
+
+  follow: (handle: string) =>
+    request<{ ok: true }>(`/api/users/${h(handle)}/follow`, { method: "POST" }),
+  unfollow: (handle: string) =>
+    request<{ ok: true }>(`/api/users/${h(handle)}/follow`, { method: "DELETE" }),
+  block: (handle: string) =>
+    request<{ ok: true }>(`/api/users/${h(handle)}/block`, { method: "POST" }),
+  unblock: (handle: string) =>
+    request<{ ok: true }>(`/api/users/${h(handle)}/block`, { method: "DELETE" }),
+  mute: (handle: string, scope: "feed" | "notifications" | "both" = "feed") =>
+    request<{ ok: true }>(`/api/users/${h(handle)}/mute`, {
+      method: "POST",
+      body: JSON.stringify({ scope }),
+    }),
+  unmute: (handle: string) =>
+    request<{ ok: true }>(`/api/users/${h(handle)}/mute`, { method: "DELETE" }),
+
+  feed: (cursor?: string) => request<FeedPage>(`/api/feed${qs(cursor)}`),
+  publicTimeline: (cursor?: string) => request<FeedPage>(`/api/posts${qs(cursor)}`),
+  hashtag: (tag: string, cursor?: string) =>
+    request<HashtagPage>(`/api/hashtags/${encodeURIComponent(tag.replace(/^#/, ""))}/posts${qs(cursor)}`),
+  search: (q: string) =>
+    request<{ users: Array<PublicUser>; posts: Array<Post> }>(
+      `/api/search?q=${encodeURIComponent(q)}`,
+    ),
+  bookmarks: (cursor?: string) => request<FeedPage>(`/api/me/bookmarks${qs(cursor)}`),
+
+  createArticle: (body: ArticleInput) =>
+    request<{ article: ArticleDto }>("/api/articles", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateArticle: (id: string, body: Partial<ArticleInput>) =>
+    request<{ article: ArticleDto }>(`/api/articles/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  article: (id: string) => request<{ article: ArticleDto }>(`/api/articles/${id}`),
+  deleteArticle: (id: string) =>
+    request<{ ok: true }>(`/api/articles/${id}`, { method: "DELETE" }),
+  myArticles: (cursor?: string) =>
+    request<{
+      articles: Array<ArticleListItem>
+      nextCursor: string | null
+    }>(`/api/articles${qs(cursor)}`),
+  userArticles: (handle: string, cursor?: string) =>
+    request<{
+      articles: Array<{
+        id: string
+        slug: string
+        title: string
+        subtitle: string | null
+        readingMinutes: number
+        publishedAt: string | null
+      }>
+      nextCursor: string | null
+    }>(`/api/users/${h(handle)}/articles${qs(cursor)}`),
+  userArticleBySlug: (handle: string, slug: string) =>
+    request<{ article: ArticleDto }>(
+      `/api/users/${h(handle)}/articles/${encodeURIComponent(slug)}`,
+    ),
+
+  createPost: (body: {
+    text: string
+    replyToId?: string
+    quoteOfId?: string
+    mediaIds?: Array<string>
+  }) => request<{ post: Post }>("/api/posts", { method: "POST", body: JSON.stringify(body) }),
+  post: (id: string) => request<{ post: Post }>(`/api/posts/${id}`),
+  thread: (id: string) => request<Thread>(`/api/posts/${id}/thread`),
+  deletePost: (id: string) => request<{ ok: true }>(`/api/posts/${id}`, { method: "DELETE" }),
+  editPost: (id: string, text: string) =>
+    request<{ post: Post }>(`/api/posts/${id}`, { method: "PATCH", body: JSON.stringify({ text }) }),
+
+  like: (id: string) => request<{ ok: true }>(`/api/posts/${id}/like`, { method: "POST" }),
+  unlike: (id: string) => request<{ ok: true }>(`/api/posts/${id}/like`, { method: "DELETE" }),
+  bookmark: (id: string) =>
+    request<{ ok: true }>(`/api/posts/${id}/bookmark`, { method: "POST" }),
+  unbookmark: (id: string) =>
+    request<{ ok: true }>(`/api/posts/${id}/bookmark`, { method: "DELETE" }),
+  repost: (id: string) => request<{ ok: true }>(`/api/posts/${id}/repost`, { method: "POST" }),
+  unrepost: (id: string) =>
+    request<{ ok: true }>(`/api/posts/${id}/repost`, { method: "DELETE" }),
+}
+
+export interface Post {
+  id: string
+  text: string
+  createdAt: string
+  editedAt: string | null
+  visibility: "public" | "followers" | "unlisted"
+  replyToId: string | null
+  quoteOfId: string | null
+  repostOfId: string | null
+  sensitive: boolean
+  contentWarning: string | null
+  replyRestriction: "anyone" | "following" | "mentioned"
+  author: {
+    id: string
+    handle: string | null
+    displayName: string | null
+    avatarUrl: string | null
+    isVerified: boolean
+    isBot: boolean
+  }
+  counts: {
+    likes: number
+    reposts: number
+    replies: number
+    quotes: number
+    bookmarks: number
+  }
+  viewer?: {
+    liked: boolean
+    bookmarked: boolean
+    reposted: boolean
+  }
+  media?: Array<PostMedia>
+  articleCard?: PostArticleCard
+}
+
+export interface PostArticleCard {
+  id: string
+  slug: string
+  title: string
+  subtitle: string | null
+  readingMinutes: number
+  publishedAt: string | null
+  authorHandle: string | null
+}
+
+export interface PostMedia {
+  id: string
+  kind: "image" | "video" | "gif"
+  width: number | null
+  height: number | null
+  blurhash: string | null
+  altText: string | null
+  processingState: "pending" | "processing" | "ready" | "failed" | "flagged"
+  variants: Array<{ kind: string; url: string; width: number; height: number }>
+}
+
+export interface FeedPage {
+  posts: Array<Post>
+  nextCursor: string | null
+}
+
+export interface HashtagPage extends FeedPage {
+  tag: string
+}
+
+export interface PublicUser {
+  id: string
+  handle: string | null
+  displayName: string | null
+  bio: string | null
+  avatarUrl: string | null
+  bannerUrl: string | null
+  isVerified: boolean
+  isBot: boolean
+  createdAt: string
+}
+
+export interface PublicProfile extends PublicUser {
+  location: string | null
+  websiteUrl: string | null
+  counts: {
+    followers: number
+    following: number
+    posts: number
+  }
+  viewer?: {
+    following: boolean
+    blocking: boolean
+    muting: boolean
+  }
+}
+
+export interface UserListPage {
+  users: Array<PublicUser>
+  nextCursor: string | null
+}
+
+export interface SelfUser {
+  id: string
+  email: string
+  emailVerified: boolean
+  handle: string | null
+  displayName: string | null
+  bio: string | null
+  location: string | null
+  websiteUrl: string | null
+  avatarUrl: string | null
+  bannerUrl: string | null
+  birthday: string | null
+  isVerified: boolean
+  isBot: boolean
+  role: "user" | "mod" | "admin"
+  locale: string
+  timezone: string | null
+  createdAt: string
+}
+
+export interface Thread {
+  ancestors: Array<Post>
+  post: Post | null
+  replies: Array<Post>
+}
+
+export interface ArticleInput {
+  title: string
+  subtitle?: string
+  slug?: string
+  coverMediaId?: string
+  bodyFormat?: "lexical" | "prosemirror" | "markdown"
+  bodyJson?: unknown
+  bodyText: string
+  status?: "draft" | "published" | "unlisted"
+}
+
+export interface ArticleListItem {
+  id: string
+  slug: string
+  title: string
+  subtitle: string | null
+  status: "draft" | "published" | "unlisted"
+  publishedAt: string | null
+  wordCount: number
+  readingMinutes: number
+}
+
+export interface ArticleDto {
+  id: string
+  slug: string
+  title: string
+  subtitle: string | null
+  bodyFormat: "lexical" | "prosemirror" | "markdown"
+  bodyJson: unknown
+  bodyText: string
+  wordCount: number
+  readingMinutes: number
+  status: "draft" | "published" | "unlisted"
+  publishedAt: string | null
+  editedAt: string | null
+  likeCount: number
+  bookmarkCount: number
+  replyCount: number
+  crosspostPostId: string | null
+  author: {
+    id: string
+    handle: string | null
+    displayName: string | null
+    avatarUrl: string | null
+    isVerified: boolean
+  }
+}

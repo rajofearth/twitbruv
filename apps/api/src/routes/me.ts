@@ -1,0 +1,137 @@
+import { Hono } from 'hono'
+import { and, desc, eq, isNull, lt } from '@workspace/db'
+import { schema } from '@workspace/db'
+import { updateProfileSchema, claimHandleSchema } from '@workspace/validators'
+import { requireAuth, type HonoEnv } from '../middleware/session.ts'
+import { isReservedHandle } from '../lib/handles.ts'
+import { toPostDto } from '../lib/post-dto.ts'
+import { loadViewerFlags } from '../lib/viewer-flags.ts'
+import { loadPostMedia } from '../lib/post-media.ts'
+import { loadArticleCards } from '../lib/article-cards.ts'
+
+export const meRoute = new Hono<HonoEnv>()
+
+meRoute.use('*', requireAuth())
+
+meRoute.get('/', async (c) => {
+  const session = c.get('session')!
+  const { db } = c.get('ctx')
+  const [user] = await db.select().from(schema.users).where(eq(schema.users.id, session.user.id)).limit(1)
+  if (!user) return c.json({ error: 'not_found' }, 404)
+  return c.json({ user: toSelfDto(user) })
+})
+
+meRoute.patch('/', async (c) => {
+  const session = c.get('session')!
+  const { db } = c.get('ctx')
+  const raw = await c.req.json()
+  const body = updateProfileSchema.parse(raw)
+
+  // Only write columns that were explicitly included in the request body. Empty string is
+  // treated as "clear this field" (→ null). Missing keys are left untouched.
+  const patch: Partial<typeof schema.users.$inferInsert> = { updatedAt: new Date() }
+  const has = (k: string) => Object.prototype.hasOwnProperty.call(raw, k)
+  if (has('displayName')) patch.displayName = body.displayName ?? null
+  if (has('bio')) patch.bio = body.bio ?? null
+  if (has('location')) patch.location = body.location ?? null
+  if (has('websiteUrl')) patch.websiteUrl = body.websiteUrl || null
+  if (has('avatarUrl')) patch.avatarUrl = body.avatarUrl || null
+  if (has('bannerUrl')) patch.bannerUrl = body.bannerUrl || null
+  if (has('birthday')) patch.birthday = body.birthday || null
+  if (has('timezone')) patch.timezone = body.timezone ?? null
+  if (has('locale')) patch.locale = body.locale ?? 'en'
+
+  const [user] = await db
+    .update(schema.users)
+    .set(patch)
+    .where(eq(schema.users.id, session.user.id))
+    .returning()
+  if (!user) return c.json({ error: 'not_found' }, 404)
+  return c.json({ user: toSelfDto(user) })
+})
+
+meRoute.post('/handle', async (c) => {
+  const session = c.get('session')!
+  const { db } = c.get('ctx')
+  const { handle } = claimHandleSchema.parse(await c.req.json())
+  if (isReservedHandle(handle)) return c.json({ error: 'reserved_handle' }, 400)
+
+  const existing = await db
+    .select({ id: schema.users.id })
+    .from(schema.users)
+    .where(eq(schema.users.handle, handle))
+    .limit(1)
+  if (existing.length > 0) return c.json({ error: 'handle_taken' }, 409)
+
+  const [user] = await db
+    .update(schema.users)
+    .set({ handle, updatedAt: new Date() })
+    .where(eq(schema.users.id, session.user.id))
+    .returning()
+  if (!user) return c.json({ error: 'not_found' }, 404)
+  return c.json({ user: toSelfDto(user) })
+})
+
+// Viewer's bookmarked posts, newest bookmark first.
+meRoute.get('/bookmarks', async (c) => {
+  const session = c.get('session')!
+  const { db, mediaEnv } = c.get('ctx')
+  const limit = Math.min(Number(c.req.query('limit') ?? 40), 100)
+  const cursor = c.req.query('cursor')
+
+  const rows = await db
+    .select({ post: schema.posts, author: schema.users, bookmarkedAt: schema.bookmarks.createdAt })
+    .from(schema.bookmarks)
+    .innerJoin(schema.posts, eq(schema.posts.id, schema.bookmarks.postId))
+    .innerJoin(schema.users, eq(schema.users.id, schema.posts.authorId))
+    .where(
+      and(
+        eq(schema.bookmarks.userId, session.user.id),
+        isNull(schema.posts.deletedAt),
+        cursor ? lt(schema.bookmarks.createdAt, new Date(cursor)) : undefined,
+      ),
+    )
+    .orderBy(desc(schema.bookmarks.createdAt))
+    .limit(limit)
+
+  const ids = rows.map((r) => r.post.id)
+  const [flags, mediaMap, articleMap] = await Promise.all([
+    loadViewerFlags(db, session.user.id, ids),
+    loadPostMedia(db, ids),
+    loadArticleCards(db, ids),
+  ])
+  const posts = rows.map((r) =>
+    toPostDto(
+      r.post,
+      r.author,
+      flags.get(r.post.id),
+      mediaMap.get(r.post.id),
+      mediaEnv,
+      articleMap.get(r.post.id),
+    ),
+  )
+  const nextCursor = rows.length === limit ? rows[rows.length - 1]!.bookmarkedAt.toISOString() : null
+  return c.json({ posts, nextCursor })
+})
+
+function toSelfDto(u: typeof schema.users.$inferSelect) {
+  return {
+    id: u.id,
+    email: u.email,
+    emailVerified: u.emailVerified,
+    handle: u.handle,
+    displayName: u.displayName,
+    bio: u.bio,
+    location: u.location,
+    websiteUrl: u.websiteUrl,
+    avatarUrl: u.avatarUrl,
+    bannerUrl: u.bannerUrl,
+    birthday: u.birthday,
+    isVerified: u.isVerified,
+    isBot: u.isBot,
+    role: u.role,
+    locale: u.locale,
+    timezone: u.timezone,
+    createdAt: u.createdAt,
+  }
+}
