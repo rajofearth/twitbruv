@@ -43,10 +43,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const unread = useUnreadNotifications(Boolean(session))
   const dmUnread = useUnreadDms(Boolean(session))
   const isInbox = location.pathname.startsWith("/inbox")
-  const isHomeRoute = location.pathname === "/"
-  const mainWidthClass = isHomeRoute
-    ? "md:max-w-[640px] md:border-x @min-[1120px]/inset:max-w-none @min-[1120px]/inset:border-x-0"
-    : "md:max-w-[640px] md:border-x"
 
   if (isPending || !session) return <PublicShell>{children}</PublicShell>
 
@@ -193,10 +189,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <SidebarInset>
           <AppHeader />
-          <div className="@container/inset flex min-h-0 flex-1 justify-center">
-            <main
-              className={`flex min-h-0 w-full min-w-0 flex-1 flex-col border-border ${mainWidthClass}`}
-            >
+          <div className="@container/inset flex min-h-0 flex-1 flex-col">
+            <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col border-border">
               {children}
             </main>
           </div>

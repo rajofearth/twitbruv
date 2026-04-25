@@ -97,7 +97,7 @@ function Landing() {
       <main className="@min-[1120px]/inset:flex @min-[1120px]/inset:justify-center @min-[1120px]/inset:overflow-x-clip">
         <div className="@min-[1120px]/inset:flex @min-[1120px]/inset:w-[1120px] @min-[1120px]/inset:min-h-[calc(100vh-3rem)] @min-[1120px]/inset:items-start">
           <div
-            className={`min-w-0 @min-[1120px]/inset:w-[640px] @min-[1120px]/inset:shrink-0 @min-[1120px]/inset:border-x @min-[1120px]/inset:border-border @min-[1120px]/inset:transition-transform @min-[1120px]/inset:duration-300 @min-[1120px]/inset:ease-out @min-[1120px]/inset:[will-change:transform] @min-[1120px]/inset:[contain:layout] ${
+            className={`mx-auto w-full min-w-0 border-border md:max-w-[640px] md:border-x @min-[1120px]/inset:mx-0 @min-[1120px]/inset:max-w-none @min-[1120px]/inset:w-[640px] @min-[1120px]/inset:shrink-0 @min-[1120px]/inset:border-x @min-[1120px]/inset:border-border @min-[1120px]/inset:transition-transform @min-[1120px]/inset:duration-300 @min-[1120px]/inset:ease-out @min-[1120px]/inset:[will-change:transform] @min-[1120px]/inset:[contain:layout] ${
               panelThread
                 ? "@min-[1120px]/inset:translate-x-0"
                 : "@min-[1120px]/inset:translate-x-[240px]"
