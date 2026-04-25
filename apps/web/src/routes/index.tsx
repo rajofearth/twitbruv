@@ -153,7 +153,13 @@ function Landing() {
             />
           </div>
 
-          <div className="hidden @min-[1120px]/inset:block @min-[1120px]/inset:h-full @min-[1120px]/inset:min-h-0 @min-[1120px]/inset:w-[480px] @min-[1120px]/inset:shrink-0 @min-[1120px]/inset:[contain:layout]">
+          <div
+            className={`hidden @min-[1120px]/inset:h-full @min-[1120px]/inset:min-h-0 @min-[1120px]/inset:w-[480px] @min-[1120px]/inset:shrink-0 @min-[1120px]/inset:[contain:layout] ${
+              panelThread
+                ? "@min-[1120px]/inset:block"
+                : "@min-[1120px]/inset:pointer-events-none"
+            }`}
+          >
             {panelThread && (
               <div
                 className={`h-full overflow-hidden border-l border-border bg-background transition-transform duration-300 ease-out [will-change:transform] ${
