@@ -1,13 +1,30 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { IconPaperclip, IconX } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
-import {  api } from "../lib/api"
+import { api } from "../lib/api"
 import { authClient } from "../lib/auth"
 import { Avatar } from "../components/avatar"
+import { ImageLightbox } from "../components/image-lightbox"
 import { subscribeToDmStream } from "../lib/dm-stream"
-import type {DmMessage} from "../lib/api";
+import {
+  MAX_UPLOAD_BYTES,
+  compressImage,
+  pickVariantUrl,
+  uploadImage,
+} from "../lib/media"
+import type { ChangeEvent, FormEvent, KeyboardEvent } from "react"
+import type { DmMessage, PostMedia } from "../lib/api"
 
 export const Route = createFileRoute("/inbox/$conversationId")({ component: Thread })
+
+const MAX_INPUT_BYTES = 15 * 1024 * 1024 // mirrors API/api/media intent ceiling pre-compress
+
+interface Pending {
+  id: string
+  file: File
+  previewUrl: string
+}
 
 function Thread() {
   const { conversationId } = Route.useParams()
@@ -15,9 +32,12 @@ function Thread() {
   const me = session?.user.id ?? null
   const [messages, setMessages] = useState<Array<DmMessage>>([])
   const [draft, setDraft] = useState("")
+  const [pending, setPending] = useState<Pending | null>(null)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lastSeenIdRef = useRef<string | null>(null)
 
   // Initial hydrate from REST; subsequent updates come through the SSE stream. We still keep a
@@ -76,33 +96,104 @@ function Thread() {
     api.dmMarkRead(conversationId, latestId).catch(() => {})
   }, [messages, conversationId])
 
+  // Auto-grow the composer textarea as the user types — capped so a wall of text doesn't
+  // swallow the message list.
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = "auto"
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+  }, [draft])
+
+  // Revoke any object URL we created when its preview goes away.
+  useEffect(() => () => {
+    if (pending) URL.revokeObjectURL(pending.previewUrl)
+  }, [pending])
+
   const peer = useMemo(() => {
     if (!me) return null
     const fromOther = messages.find((m) => m.sender && m.senderId !== me)?.sender
     return fromOther ?? null
   }, [messages, me])
 
-  async function send(e: React.FormEvent) {
-    e.preventDefault()
+  // Group consecutive messages from the same sender, splitting whenever the day changes so we
+  // can drop a sticky day-separator between them.
+  const groups = useMemo(() => buildGroups(messages), [messages])
+
+  function attachFile(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setError("only images can be attached")
+      return
+    }
+    if (file.size > MAX_INPUT_BYTES) {
+      setError(`image too large (max ${(MAX_INPUT_BYTES / 1024 / 1024).toFixed(0)}MB)`)
+      return
+    }
+    if (pending) URL.revokeObjectURL(pending.previewUrl)
+    setPending({
+      id: crypto.randomUUID(),
+      file,
+      previewUrl: URL.createObjectURL(file),
+    })
+    setError(null)
+  }
+
+  function clearPending() {
+    if (pending) URL.revokeObjectURL(pending.previewUrl)
+    setPending(null)
+  }
+
+  function onFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) attachFile(file)
+    // Reset the input so picking the same file twice still fires onChange.
+    e.target.value = ""
+  }
+
+  async function send(e?: FormEvent) {
+    e?.preventDefault()
     const text = draft.trim()
-    if (!text || sending) return
+    if ((!text && !pending) || sending) return
     setSending(true)
+    setError(null)
     try {
-      const { message } = await api.dmSend(conversationId, { text })
+      let mediaId: string | undefined
+      if (pending) {
+        const compressed = await compressImage(pending.file)
+        if (compressed.size > MAX_UPLOAD_BYTES) {
+          throw new Error(
+            `image too large after compression (${(compressed.size / 1024 / 1024).toFixed(1)}MB > ${MAX_UPLOAD_BYTES / 1024 / 1024}MB)`,
+          )
+        }
+        const uploaded = await uploadImage(compressed)
+        mediaId = uploaded.id
+      }
+      const { message } = await api.dmSend(conversationId, {
+        text: text || undefined,
+        mediaId,
+      })
       setDraft("")
+      clearPending()
       setMessages((prev) =>
         prev.some((m) => m.id === message.id) ? prev : [...prev, message],
       )
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "failed to send")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "failed to send")
     } finally {
       setSending(false)
     }
   }
 
+  function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      send()
+    }
+  }
+
   return (
     <main className="flex h-[calc(100vh-3.5rem)] flex-col">
-      <header className="flex items-center gap-3 border-b border-border px-4 py-3">
+      <header className="flex items-center gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm">
         <Link to="/inbox" className="text-xs text-muted-foreground hover:underline">
           ← Inbox
         </Link>
@@ -121,7 +212,7 @@ function Thread() {
               <Link
                 to="/$handle"
                 params={{ handle: peer.handle }}
-                className="text-xs text-muted-foreground hover:underline"
+                className="truncate text-xs text-muted-foreground hover:underline"
               >
                 @{peer.handle}
               </Link>
@@ -130,70 +221,243 @@ function Thread() {
         </div>
       </header>
 
-      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-4 py-3">
-        {error && <p className="p-4 text-sm text-destructive">{error}</p>}
-        {messages.length === 0 && !error && (
-          <p className="p-4 text-sm text-muted-foreground">Say hello.</p>
+      <div ref={scrollerRef} className="flex-1 overflow-y-auto px-4 py-4">
+        {error && (
+          <p className="mx-auto mb-3 max-w-prose rounded-md border border-destructive/40 bg-destructive/5 p-2 text-center text-xs text-destructive">
+            {error}
+          </p>
         )}
-        <ul className="space-y-2">
-          {messages.map((m, i) => {
-            const isMine = m.senderId === me
-            const showAvatar =
-              !isMine && (i === 0 || messages[i - 1].senderId !== m.senderId)
-            return (
-              <li
-                key={m.id}
-                className={`flex items-end gap-2 ${isMine ? "justify-end" : "justify-start"}`}
-              >
-                {!isMine && (
-                  <div className="w-8 shrink-0">
-                    {showAvatar && m.sender && (
-                      <Avatar
-                        initial={(m.sender.displayName || m.sender.handle || "?")
-                          .slice(0, 1)
-                          .toUpperCase()}
-                        src={m.sender.avatarUrl}
-                      />
-                    )}
-                  </div>
-                )}
-                <div
-                  className={`max-w-[75%] rounded-2xl px-3 py-2 text-sm ${
-                    isMine
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-foreground"
-                  }`}
-                  title={new Date(m.createdAt).toLocaleString()}
-                >
-                  {m.text ?? <em className="opacity-70">[unsupported]</em>}
-                </div>
-              </li>
-            )
-          })}
+        {messages.length === 0 && !error && (
+          <p className="mt-12 text-center text-sm text-muted-foreground">
+            Say hi 👋
+          </p>
+        )}
+
+        <ul className="flex flex-col gap-1">
+          {groups.map((group) => (
+            <GroupBlock key={group.key} group={group} me={me} />
+          ))}
         </ul>
       </div>
+
+      {pending && (
+        <div className="border-t border-border px-3 pt-2">
+          <div className="relative inline-block">
+            <img
+              src={pending.previewUrl}
+              alt="attachment preview"
+              className="h-20 w-20 rounded-md border border-border object-cover"
+            />
+            <button
+              type="button"
+              onClick={clearPending}
+              aria-label="remove attachment"
+              className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-background text-foreground shadow-sm ring-1 ring-border hover:bg-muted"
+            >
+              <IconX size={12} stroke={2} />
+            </button>
+          </div>
+        </div>
+      )}
 
       <form
         onSubmit={send}
         className="flex items-end gap-2 border-t border-border px-3 py-3"
       >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={onFileChange}
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          aria-label="attach image"
+          disabled={sending}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <IconPaperclip size={18} stroke={1.75} />
+        </Button>
         <textarea
+          ref={textareaRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Message"
+          placeholder={pending ? "Add a caption…" : "Message"}
           rows={1}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault()
-              send(e)
-            }
-          }}
-          className="flex-1 resize-none rounded-md border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          disabled={sending}
+          onKeyDown={onKeyDown}
+          className="flex-1 resize-none rounded-md border border-border bg-transparent px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
         />
-        <Button type="submit" size="sm" disabled={sending || draft.trim().length === 0}>
+        <Button
+          type="submit"
+          size="sm"
+          disabled={sending || (draft.trim().length === 0 && !pending)}
+        >
           {sending ? "…" : "Send"}
         </Button>
       </form>
     </main>
   )
+}
+
+interface MessageGroup {
+  key: string
+  isMine: boolean
+  sender: DmMessage["sender"]
+  messages: Array<DmMessage>
+  daySeparator: string | null
+}
+
+function buildGroups(messages: Array<DmMessage>): Array<MessageGroup> {
+  const out: Array<MessageGroup> = []
+  let lastDay: string | null = null
+  for (const m of messages) {
+    const day = new Date(m.createdAt).toDateString()
+    const last = out.at(-1)
+    if (last && last.messages[0].senderId === m.senderId && day === lastDay) {
+      last.messages.push(m)
+      continue
+    }
+    out.push({
+      key: m.id,
+      isMine: false, // overwritten by GroupBlock — easier than threading `me` here
+      sender: m.sender,
+      messages: [m],
+      daySeparator: day === lastDay ? null : formatDay(new Date(m.createdAt)),
+    })
+    lastDay = day
+  }
+  return out
+}
+
+function GroupBlock({ group, me }: { group: MessageGroup; me: string | null }) {
+  const isMine = group.messages[0].senderId === me
+  return (
+    <>
+      {group.daySeparator && (
+        <li className="my-3 text-center text-[11px] uppercase tracking-wider text-muted-foreground">
+          {group.daySeparator}
+        </li>
+      )}
+      <li className={`flex items-end gap-2 ${isMine ? "justify-end" : "justify-start"}`}>
+        {!isMine && (
+          <div className="w-8 shrink-0">
+            {group.sender && (
+              <Avatar
+                initial={(group.sender.displayName || group.sender.handle || "?")
+                  .slice(0, 1)
+                  .toUpperCase()}
+                src={group.sender.avatarUrl}
+              />
+            )}
+          </div>
+        )}
+        <div className={`flex max-w-[75%] flex-col gap-0.5 ${isMine ? "items-end" : "items-start"}`}>
+          {group.messages.map((m, i) => {
+            const isFirst = i === 0
+            const isLast = i === group.messages.length - 1
+            return (
+              <Bubble
+                key={m.id}
+                message={m}
+                isMine={isMine}
+                isFirst={isFirst}
+                isLast={isLast}
+              />
+            )
+          })}
+        </div>
+      </li>
+    </>
+  )
+}
+
+function Bubble({
+  message,
+  isMine,
+  isFirst,
+  isLast,
+}: {
+  message: DmMessage
+  isMine: boolean
+  isFirst: boolean
+  isLast: boolean
+}) {
+  // Tighten corners on the side where bubbles stack so a chain reads as one block.
+  const corners = isMine
+    ? `${isFirst ? "rounded-tr-2xl" : "rounded-tr-md"} ${isLast ? "rounded-br-2xl" : "rounded-br-md"} rounded-l-2xl`
+    : `${isFirst ? "rounded-tl-2xl" : "rounded-tl-md"} ${isLast ? "rounded-bl-2xl" : "rounded-bl-md"} rounded-r-2xl`
+  const bg = isMine
+    ? "bg-primary text-primary-foreground"
+    : "bg-muted text-foreground"
+  const time = new Date(message.createdAt).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  })
+  return (
+    <div
+      className={`group max-w-full ${corners} ${bg} px-3 py-2 text-sm leading-relaxed`}
+      title={new Date(message.createdAt).toLocaleString()}
+    >
+      {message.media && <MessageImage media={message.media} />}
+      {message.text && (
+        <p className="whitespace-pre-wrap break-words">{message.text}</p>
+      )}
+      {!message.media && !message.text && (
+        <em className="opacity-70">[unsupported]</em>
+      )}
+      {isLast && (
+        <div
+          className={`mt-1 text-[10px] tabular-nums opacity-60 ${
+            isMine ? "text-right" : ""
+          }`}
+        >
+          {time}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MessageImage({ media }: { media: PostMedia }) {
+  const url = pickVariantUrl(media, "medium")
+  const full = pickVariantUrl(media, "large") ?? url
+  if (!url) {
+    return (
+      <div className="my-1 flex h-32 w-48 items-center justify-center rounded-md bg-background/30 text-xs">
+        {media.processingState === "failed" ? "media failed" : "processing…"}
+      </div>
+    )
+  }
+  return (
+    <ImageLightbox
+      images={full ? [{ src: full, alt: media.altText ?? "" }] : []}
+      disabled={!full}
+      className="block"
+    >
+      <img
+        src={url}
+        alt={media.altText ?? ""}
+        loading="lazy"
+        className="my-1 max-h-80 max-w-full rounded-md object-cover"
+        style={
+          media.width && media.height
+            ? { aspectRatio: `${media.width} / ${media.height}` }
+            : undefined
+        }
+      />
+    </ImageLightbox>
+  )
+}
+
+function formatDay(d: Date): string {
+  const today = new Date()
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  if (d.toDateString() === today.toDateString()) return "Today"
+  if (d.toDateString() === yesterday.toDateString()) return "Yesterday"
+  return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })
 }

@@ -42,6 +42,62 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T
 }
 
+const MAX_DIMENSION = 2048
+const COMPRESSED_MIME = "image/webp"
+const COMPRESSED_QUALITY = 0.85
+export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024 // 5 MB post-compression ceiling
+
+/**
+ * Client-side downscale + recompress. Keeps the longest side ≤ 2048px and re-encodes as WebP.
+ * Returns the original file unchanged for tiny images that wouldn't benefit, or when anything
+ * fails (server still enforces its own ceiling). Never silently produces a smaller file if the
+ * result would be larger than the input.
+ */
+export async function compressImage(file: File): Promise<File> {
+  if (typeof window === "undefined") return file
+  if (!file.type.startsWith("image/")) return file
+  // GIFs lose animation if we re-encode; skip.
+  if (file.type === "image/gif") return file
+
+  try {
+    const bitmap = await createImageBitmap(file)
+    const max = Math.max(bitmap.width, bitmap.height)
+    const scale = max > MAX_DIMENSION ? MAX_DIMENSION / max : 1
+    const targetW = Math.round(bitmap.width * scale)
+    const targetH = Math.round(bitmap.height * scale)
+    const canvas =
+      typeof OffscreenCanvas !== "undefined"
+        ? new OffscreenCanvas(targetW, targetH)
+        : Object.assign(document.createElement("canvas"), {
+            width: targetW,
+            height: targetH,
+          })
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return file
+    ctx.drawImage(bitmap, 0, 0, targetW, targetH)
+    bitmap.close()
+
+    const blob =
+      canvas instanceof OffscreenCanvas
+        ? await canvas.convertToBlob({
+            type: COMPRESSED_MIME,
+            quality: COMPRESSED_QUALITY,
+          })
+        : await new Promise<Blob | null>((resolve) =>
+            canvas.toBlob(resolve, COMPRESSED_MIME, COMPRESSED_QUALITY),
+          )
+    if (!blob || blob.size >= file.size) return file
+    return new File([blob], replaceExt(file.name, "webp"), { type: COMPRESSED_MIME })
+  } catch {
+    return file
+  }
+}
+
+function replaceExt(name: string, ext: string): string {
+  const base = name.includes(".") ? name.slice(0, name.lastIndexOf(".")) : name
+  return `${base}.${ext}`
+}
+
 export async function uploadImage(file: File): Promise<UploadedMedia> {
   const intent = await json<{
     mediaId: string

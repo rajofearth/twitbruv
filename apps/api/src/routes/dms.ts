@@ -7,18 +7,22 @@ import { assetUrl } from '@workspace/media/s3'
 import { requireAuth, type HonoEnv } from '../middleware/session.ts'
 import { notify } from '../lib/notify.ts'
 import { dmChannel } from '../lib/pubsub.ts'
+import { toMediaDto, type MediaDto } from '../lib/post-dto.ts'
 
 export const dmsRoute = new Hono<HonoEnv>()
 
 dmsRoute.use('*', requireAuth())
 
-const sendSchema = z.object({
-  text: z.string().trim().min(1).max(4000).optional(),
-  sharedPostId: z.string().uuid().optional(),
-  sharedArticleId: z.string().uuid().optional(),
-}).refine((b) => b.text || b.sharedPostId || b.sharedArticleId, {
-  message: 'message must include text, a shared post, or a shared article',
-})
+const sendSchema = z
+  .object({
+    text: z.string().trim().min(1).max(4000).optional(),
+    sharedPostId: z.string().uuid().optional(),
+    sharedArticleId: z.string().uuid().optional(),
+    mediaId: z.string().uuid().optional(),
+  })
+  .refine((b) => b.text || b.sharedPostId || b.sharedArticleId || b.mediaId, {
+    message: 'message must include text, media, or a shared post/article',
+  })
 
 const startSchema = z.object({
   userId: z.string().uuid(),
@@ -303,6 +307,18 @@ dmsRoute.get('/:id/messages', async (c) => {
     .orderBy(desc(schema.messages.createdAt))
     .limit(limit)
 
+  const mediaIds = Array.from(
+    new Set(rows.map((r) => r.message.mediaId).filter((id): id is string => Boolean(id))),
+  )
+  const mediaMap = new Map<string, MediaDto>()
+  if (mediaIds.length > 0) {
+    const mediaRows = await db
+      .select()
+      .from(schema.media)
+      .where(inArray(schema.media.id, mediaIds))
+    for (const m of mediaRows) mediaMap.set(m.id, toMediaDto(m, mediaEnv))
+  }
+
   const messages = rows.map((r) => ({
     id: r.message.id,
     conversationId: r.message.conversationId,
@@ -311,6 +327,7 @@ dmsRoute.get('/:id/messages', async (c) => {
     text: r.message.text,
     sharedPostId: r.message.sharedPostId,
     sharedArticleId: r.message.sharedArticleId,
+    media: r.message.mediaId ? mediaMap.get(r.message.mediaId) ?? null : null,
     editedAt: r.message.editedAt?.toISOString() ?? null,
     createdAt: r.message.createdAt.toISOString(),
     sender: {
@@ -329,7 +346,7 @@ dmsRoute.get('/:id/messages', async (c) => {
 // Send a message. Updates the conversation's lastMessageAt and notifies non-self members.
 dmsRoute.post('/:id/messages', async (c) => {
   const session = c.get('session')!
-  const { db, pubsub, rateLimit } = c.get('ctx')
+  const { db, mediaEnv, pubsub, rateLimit } = c.get('ctx')
   await rateLimit(c, 'dms.send')
   const me = session.user.id
   const conversationId = c.req.param('id')
@@ -338,7 +355,19 @@ dmsRoute.post('/:id/messages', async (c) => {
   const membership = await loadMembership(db, conversationId, me)
   if (!membership) return c.json({ error: 'not_a_member' }, 403)
 
-  const kind: 'text' | 'post_share' | 'article_share' = body.sharedPostId
+  // Verify the media belongs to me before attaching — stops mediaId enumeration / theft.
+  if (body.mediaId) {
+    const [m] = await db
+      .select({ ownerId: schema.media.ownerId })
+      .from(schema.media)
+      .where(eq(schema.media.id, body.mediaId))
+      .limit(1)
+    if (!m || m.ownerId !== me) return c.json({ error: 'invalid_media' }, 400)
+  }
+
+  const kind: 'text' | 'media' | 'post_share' | 'article_share' = body.mediaId
+    ? 'media'
+    : body.sharedPostId
     ? 'post_share'
     : body.sharedArticleId
     ? 'article_share'
@@ -354,6 +383,7 @@ dmsRoute.post('/:id/messages', async (c) => {
         text: body.text ?? null,
         sharedPostId: body.sharedPostId ?? null,
         sharedArticleId: body.sharedArticleId ?? null,
+        mediaId: body.mediaId ?? null,
       })
       .returning()
     if (!m) throw new Error('failed_to_send_message')
@@ -399,6 +429,16 @@ dmsRoute.post('/:id/messages', async (c) => {
     return { message: m, otherUserIds: others.map((o) => o.userId) }
   })
 
+  let mediaDto: MediaDto | null = null
+  if (message.message.mediaId) {
+    const [m] = await db
+      .select()
+      .from(schema.media)
+      .where(eq(schema.media.id, message.message.mediaId))
+      .limit(1)
+    if (m) mediaDto = toMediaDto(m, mediaEnv)
+  }
+
   const payload = {
     id: message.message.id,
     conversationId: message.message.conversationId,
@@ -407,6 +447,7 @@ dmsRoute.post('/:id/messages', async (c) => {
     text: message.message.text,
     sharedPostId: message.message.sharedPostId,
     sharedArticleId: message.message.sharedArticleId,
+    media: mediaDto,
     editedAt: message.message.editedAt?.toISOString() ?? null,
     createdAt: message.message.createdAt.toISOString(),
   }

@@ -98,7 +98,12 @@ export const api = {
     ),
   dmSend: (
     conversationId: string,
-    body: { text?: string; sharedPostId?: string; sharedArticleId?: string },
+    body: {
+      text?: string
+      sharedPostId?: string
+      sharedArticleId?: string
+      mediaId?: string
+    },
   ) =>
     request<{ message: DmMessage }>(`/api/dms/${conversationId}/messages`, {
       method: "POST",
@@ -451,6 +456,7 @@ export interface DmMessage {
   text: string | null
   sharedPostId: string | null
   sharedArticleId: string | null
+  media: PostMedia | null
   editedAt: string | null
   createdAt: string
   sender?: DmMember
