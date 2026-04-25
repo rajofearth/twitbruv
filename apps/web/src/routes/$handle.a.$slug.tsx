@@ -42,6 +42,13 @@ function ArticleView() {
 
   return (
     <main className="">
+      {article.coverUrl && (
+        <img
+          src={article.coverUrl}
+          alt=""
+          className="aspect-[3/1] w-full object-cover"
+        />
+      )}
       <header className="border-b border-border px-4 py-6">
         <div className="flex items-center justify-between gap-4">
           <div>

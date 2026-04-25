@@ -98,6 +98,14 @@ function replaceExt(name: string, ext: string): string {
   return `${base}.${ext}`
 }
 
+/** Update alt text on an already-uploaded media. Best-effort — failures don't block the send. */
+export async function setAltText(mediaId: string, altText: string | null): Promise<void> {
+  await json(`/api/media/${mediaId}/alt`, {
+    method: "PATCH",
+    body: JSON.stringify({ altText: altText && altText.trim().length > 0 ? altText.trim() : null }),
+  })
+}
+
 export async function uploadImage(file: File): Promise<UploadedMedia> {
   const intent = await json<{
     mediaId: string

@@ -107,14 +107,15 @@ function AdminUsers() {
           return (
             <li
               key={u.id}
-              className="flex items-start gap-3 border-b border-border px-4 py-3"
+              className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-start sm:gap-3"
             >
-              <Avatar
-                initial={(u.displayName || u.handle || u.email).slice(0, 1).toUpperCase()}
-                src={u.avatarUrl}
-                className="size-10"
-              />
-              <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 flex-1 gap-3">
+                <Avatar
+                  initial={(u.displayName || u.handle || u.email).slice(0, 1).toUpperCase()}
+                  src={u.avatarUrl}
+                  className="size-10 shrink-0"
+                />
+                <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                   {u.handle ? (
                     <Link
@@ -149,9 +150,10 @@ function AdminUsers() {
                 {u.banReason && (
                   <p className="mt-1 text-xs text-destructive">reason: {u.banReason}</p>
                 )}
+                </div>
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-1">
-                <div className="flex gap-1">
+              <div className="flex shrink-0 flex-row flex-wrap items-center gap-1 sm:flex-col sm:items-end">
+                <div className="flex flex-wrap gap-1">
                   {u.banned ? (
                     <Button
                       size="sm"

@@ -10,6 +10,9 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   LOG_LEVEL: z.string().default("info"),
+  NODE_ENV: z
+    .enum(["development", "test", "production"])
+    .default("development"),
 
   S3_ENDPOINT: z.string().url(),
   S3_REGION: z.string().default("auto"),

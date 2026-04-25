@@ -4,10 +4,13 @@ import {
   IconBookmark,
   IconBookmarkFilled,
   IconDots,
+  IconFlag,
   IconHeart,
   IconHeartFilled,
   IconMessageCircle,
   IconPencil,
+  IconPin,
+  IconPinFilled,
   IconQuote,
   IconRepeat,
   IconTrash,
@@ -31,6 +34,7 @@ import { recordImpression } from "../lib/analytics"
 import { authClient } from "../lib/auth"
 import { ApiError, api } from "../lib/api"
 import { RichText } from "./rich-text"
+import { ReportDialog } from "./report-dialog"
 import { Avatar } from "./avatar"
 import { ImageLightbox } from "./image-lightbox"
 import { Compose } from "./compose"
@@ -273,6 +277,7 @@ export function PostCard({
   }, [post.id])
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
   const [editText, setEditText] = useState(post.text)
   const [editError, setEditError] = useState<string | null>(null)
   const authorHandle = post.author.handle
@@ -395,6 +400,12 @@ export function PostCard({
       ref={articleRef}
       className="border-b border-border px-4 py-4 transition-colors hover:bg-muted/20"
     >
+      {outerPost.pinned && (
+        <div className="mb-2 ml-10 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <IconPinFilled size={14} stroke={1.75} />
+          <span>Pinned</span>
+        </div>
+      )}
       {isRepost && outerPost.author.handle && (
         <Link
           to="/$handle"
@@ -465,7 +476,7 @@ export function PostCard({
           {post.editedAt && (
             <span className="text-xs text-muted-foreground">(edited)</span>
           )}
-          {isOwner && (
+          {(isOwner || session) && (
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -478,7 +489,7 @@ export function PostCard({
                 }
               />
               <DropdownMenuContent align="end" sideOffset={4} className="w-40">
-                {canEdit && (
+                {isOwner && canEdit && (
                   <DropdownMenuItem
                     onClick={() => {
                       setEditing(true)
@@ -489,17 +500,48 @@ export function PostCard({
                     <span>Edit</span>
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={onDelete}
-                  disabled={busy}
-                >
-                  <IconTrash size={14} stroke={1.75} />
-                  <span>Delete</span>
-                </DropdownMenuItem>
+                {isOwner && !isRepost && !post.replyToId && !post.quoteOfId && (
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      try {
+                        if (post.pinned) await api.unpinPost(post.id)
+                        else await api.pinPost(post.id)
+                        onChange?.({ ...post, pinned: !post.pinned })
+                      } catch {
+                        /* surfaced via the post going stale on next refresh */
+                      }
+                    }}
+                  >
+                    <IconPin size={14} stroke={1.75} />
+                    <span>{post.pinned ? "Unpin" : "Pin to profile"}</span>
+                  </DropdownMenuItem>
+                )}
+                {isOwner && (
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={onDelete}
+                    disabled={busy}
+                  >
+                    <IconTrash size={14} stroke={1.75} />
+                    <span>Delete</span>
+                  </DropdownMenuItem>
+                )}
+                {!isOwner && (
+                  <DropdownMenuItem onClick={() => setReportOpen(true)}>
+                    <IconFlag size={14} stroke={1.75} />
+                    <span>Report</span>
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          <ReportDialog
+            open={reportOpen}
+            onOpenChange={setReportOpen}
+            subjectType="post"
+            subjectId={post.id}
+            subjectLabel={authorHandle ? `@${authorHandle}'s post` : "this post"}
+          />
         </header>
         {editing ? (
           <div className="mt-1">

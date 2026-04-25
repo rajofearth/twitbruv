@@ -2,6 +2,7 @@ import { Link, createFileRoute } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 import { IconPencilPlus } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
+import { Skeleton, SkeletonAvatar } from "@workspace/ui/components/skeleton"
 import { api } from "../lib/api"
 import { Avatar } from "../components/avatar"
 import { subscribeToDmStream } from "../lib/dm-stream"
@@ -52,12 +53,29 @@ function InboxList() {
 
       {error && <p className="p-4 text-sm text-destructive">{error}</p>}
       {!conversations && !error && (
-        <p className="p-4 text-sm text-muted-foreground">loading…</p>
+        <ul>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <li key={i} className="flex items-start gap-3 border-b border-border px-4 py-3">
+              <SkeletonAvatar />
+              <div className="flex-1 space-y-2">
+                <div className="flex justify-between">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-12" />
+                </div>
+                <Skeleton className="h-3 w-3/4" />
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
       {conversations && conversations.length === 0 && (
-        <p className="p-4 text-sm text-muted-foreground">
-          No conversations yet. Open someone's profile and tap Message to say hi.
-        </p>
+        <div className="px-4 py-16 text-center">
+          <p className="text-sm font-semibold">No conversations yet</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Tap <span className="font-medium">New</span> above, or open someone's profile and
+            tap the message icon.
+          </p>
+        </div>
       )}
       {conversations && conversations.length > 0 && (
         <ul>

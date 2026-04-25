@@ -3,6 +3,16 @@ import type { DmMessage } from "./api"
 
 export type DmEvent =
   | { type: "message"; conversationId: string; message: DmMessage }
+  | { type: "message_edited"; conversationId: string; messageId: string; text: string; editedAt: string }
+  | { type: "message_deleted"; conversationId: string; messageId: string }
+  | {
+      type: "reaction"
+      conversationId: string
+      messageId: string
+      userId: string
+      emoji: string
+      op: "add" | "remove"
+    }
   | { type: "read"; conversationId: string; userId: string; messageId: string }
   | { type: "membership"; conversationId: string }
   | { type: "typing"; conversationId: string; userId: string }

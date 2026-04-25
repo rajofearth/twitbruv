@@ -60,6 +60,10 @@ export const api = {
   publicTimeline: (cursor?: string) => request<FeedPage>(`/api/posts${qs(cursor)}`),
   hashtag: (tag: string, cursor?: string) =>
     request<HashtagPage>(`/api/hashtags/${encodeURIComponent(tag.replace(/^#/, ""))}/posts${qs(cursor)}`),
+  trendingHashtags: () =>
+    request<{ hashtags: Array<{ tag: string; postCount: number }>; cached: boolean }>(
+      "/api/hashtags/trending",
+    ),
   search: (q: string) =>
     request<{ users: Array<PublicUser>; posts: Array<Post> }>(
       `/api/search?q=${encodeURIComponent(q)}`,
@@ -119,6 +123,20 @@ export const api = {
     }),
   dmTyping: (conversationId: string) =>
     request<{ ok: true }>(`/api/dms/${conversationId}/typing`, { method: "POST" }),
+  dmEditMessage: (conversationId: string, messageId: string, text: string) =>
+    request<{ ok: true; editedAt: string }>(
+      `/api/dms/${conversationId}/messages/${messageId}`,
+      { method: "PATCH", body: JSON.stringify({ text }) },
+    ),
+  dmDeleteMessage: (conversationId: string, messageId: string) =>
+    request<{ ok: true }>(`/api/dms/${conversationId}/messages/${messageId}`, {
+      method: "DELETE",
+    }),
+  dmToggleReaction: (conversationId: string, messageId: string, emoji: string) =>
+    request<{ ok: true; op: "add" | "remove" }>(
+      `/api/dms/${conversationId}/messages/${messageId}/reactions`,
+      { method: "POST", body: JSON.stringify({ emoji }) },
+    ),
   dmCreateInvite: (
     conversationId: string,
     body: { expiresInHours?: number; maxUses?: number } = {},
@@ -218,6 +236,9 @@ export const api = {
   repost: (id: string) => request<{ ok: true }>(`/api/posts/${id}/repost`, { method: "POST" }),
   unrepost: (id: string) =>
     request<{ ok: true }>(`/api/posts/${id}/repost`, { method: "DELETE" }),
+  pinPost: (id: string) => request<{ ok: true }>(`/api/posts/${id}/pin`, { method: "POST" }),
+  unpinPost: (id: string) =>
+    request<{ ok: true }>(`/api/posts/${id}/pin`, { method: "DELETE" }),
 
   adminUsers: (q?: string, cursor?: string) => {
     const params = new URLSearchParams()
@@ -268,7 +289,27 @@ export const api = {
       method: "DELETE",
       body: JSON.stringify(body),
     }),
+
+  report: (body: {
+    subjectType: "post" | "user" | "article" | "message"
+    subjectId: string
+    reason: ReportReason
+    details?: string
+  }) =>
+    request<{ id: string | null; deduped: boolean }>("/api/reports", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 }
+
+export type ReportReason =
+  | "spam"
+  | "harassment"
+  | "csam"
+  | "violence"
+  | "impersonation"
+  | "illegal"
+  | "other"
 
 export interface Post {
   id: string
@@ -308,6 +349,8 @@ export interface Post {
   repostOf?: Post
   /** Populated on quote rows: the post being quoted, rendered as a bordered embed below the text. */
   quoteOf?: Post
+  /** Set when this row is the pinned post on a profile feed. */
+  pinned?: boolean
 }
 
 export interface PostArticleCard {
@@ -461,6 +504,8 @@ export interface ArticleDto {
   bookmarkCount: number
   replyCount: number
   crosspostPostId: string | null
+  coverMediaId?: string | null
+  coverUrl?: string | null
   author: {
     id: string
     handle: string | null
@@ -543,6 +588,8 @@ export interface DmMessage {
   sharedPostId: string | null
   sharedArticleId: string | null
   media: PostMedia | null
+  reactions: Array<{ emoji: string; userId: string }>
+  deletedAt?: string | null
   editedAt: string | null
   createdAt: string
   sender?: DmMember

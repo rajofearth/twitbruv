@@ -9,6 +9,7 @@ import {
   IconUserPlus,
 } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
+import { Skeleton, SkeletonAvatar } from "@workspace/ui/components/skeleton"
 import {  api } from "../lib/api"
 import { authClient } from "../lib/auth"
 import type {NotificationItem} from "../lib/api";
@@ -64,19 +65,51 @@ function Notifications() {
     }
   }
 
+  async function markAllRead() {
+    await api.notificationsMarkRead({ all: true })
+    setItems((prev) =>
+      prev.map((n) => (n.readAt ? n : { ...n, readAt: new Date().toISOString() })),
+    )
+  }
+  const hasUnread = items.some((n) => !n.readAt)
+
   return (
     <main>
-      <header className="sticky top-0 z-10 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm">
+      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm">
         <h1 className="text-base font-semibold">Notifications</h1>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={!hasUnread}
+          onClick={markAllRead}
+        >
+          Mark all read
+        </Button>
       </header>
       {loading ? (
-        <p className="p-4 text-sm text-muted-foreground">loading…</p>
+        <ul>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <li
+              key={i}
+              className="flex items-start gap-3 border-b border-border px-4 py-3"
+            >
+              <SkeletonAvatar className="size-8" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-1/3" />
+              </div>
+            </li>
+          ))}
+        </ul>
       ) : error ? (
         <p className="p-4 text-sm text-destructive">{error}</p>
       ) : items.length === 0 ? (
-        <p className="p-4 text-sm text-muted-foreground">
-          Nothing yet. Get out there and post something.
-        </p>
+        <div className="px-4 py-16 text-center">
+          <p className="text-sm font-semibold">All caught up</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            New likes, replies, mentions, and follows will show up here.
+          </p>
+        </div>
       ) : (
         <ul>
           {items.map((n) => (

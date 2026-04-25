@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { Button } from "@workspace/ui/components/button"
+import { SkeletonPostCard } from "@workspace/ui/components/skeleton"
 import { PostCard } from "./post-card"
 import type { FeedPage, Post } from "../lib/api"
 
@@ -66,13 +67,19 @@ export function Feed({
 
   if (loading)
     return (
-      <div className="px-4 py-6 text-sm text-muted-foreground">loading…</div>
+      <div>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <SkeletonPostCard key={i} />
+        ))}
+      </div>
     )
   if (error)
     return <div className="px-4 py-6 text-sm text-destructive">{error}</div>
   if (posts.length === 0)
     return (
-      <div className="p-4 text-sm text-muted-foreground">{emptyMessage}</div>
+      <div className="p-8 text-center text-sm text-muted-foreground">
+        {emptyMessage}
+      </div>
     )
 
   return (

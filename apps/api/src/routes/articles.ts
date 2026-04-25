@@ -24,7 +24,15 @@ function toArticleDto(
   a: typeof schema.articles.$inferSelect,
   author: typeof schema.users.$inferSelect,
   env: MediaEnv,
+  coverMedia?: typeof schema.media.$inferSelect | null,
 ) {
+  const variants = Array.isArray(coverMedia?.variants)
+    ? (coverMedia.variants as Array<{ kind: string; key: string; width: number; height: number }>)
+    : []
+  const pickKey =
+    variants.find((v) => v.kind === 'large')?.key ??
+    variants.find((v) => v.kind === 'medium')?.key ??
+    null
   return {
     id: a.id,
     slug: a.slug,
@@ -43,6 +51,8 @@ function toArticleDto(
     bookmarkCount: a.bookmarkCount,
     replyCount: a.replyCount,
     crosspostPostId: a.crosspostPostId,
+    coverMediaId: a.coverMediaId,
+    coverUrl: pickKey ? assetUrl(env, pickKey) : null,
     author: {
       id: author.id,
       handle: author.handle,
@@ -51,6 +61,15 @@ function toArticleDto(
       isVerified: author.isVerified,
     },
   }
+}
+
+async function loadCover(
+  db: import('@workspace/db').Database,
+  coverMediaId: string | null,
+): Promise<typeof schema.media.$inferSelect | null> {
+  if (!coverMediaId) return null
+  const [row] = await db.select().from(schema.media).where(eq(schema.media.id, coverMediaId)).limit(1)
+  return row ?? null
 }
 
 articlesRoute.post('/', requireAuth(), async (c) => {
@@ -110,7 +129,17 @@ articlesRoute.post('/', requireAuth(), async (c) => {
     return { article: { ...article, crosspostPostId }, author: author! }
   })
 
-  return c.json({ article: toArticleDto(result.article, result.author, c.get('ctx').mediaEnv) }, 201)
+  return c.json(
+    {
+      article: toArticleDto(
+        result.article,
+        result.author,
+        c.get('ctx').mediaEnv,
+        await loadCover(c.get('ctx').db, result.article.coverMediaId),
+      ),
+    },
+    201,
+  )
 })
 
 articlesRoute.patch('/:id', requireAuth(), async (c) => {
@@ -181,7 +210,14 @@ articlesRoute.patch('/:id', requireAuth(), async (c) => {
     return { article, author: author! }
   })
 
-  return c.json({ article: toArticleDto(result.article, result.author, c.get('ctx').mediaEnv) })
+  return c.json({
+    article: toArticleDto(
+      result.article,
+      result.author,
+      c.get('ctx').mediaEnv,
+      await loadCover(c.get('ctx').db, result.article.coverMediaId),
+    ),
+  })
 })
 
 articlesRoute.delete('/:id', requireAuth(), async (c) => {
@@ -219,7 +255,14 @@ articlesRoute.get('/:id', requireAuth(), async (c) => {
   if (row.article.status === 'draft' && row.article.authorId !== session.user.id) {
     return c.json({ error: 'not_found' }, 404)
   }
-  return c.json({ article: toArticleDto(row.article, row.author, c.get('ctx').mediaEnv) })
+  return c.json({
+    article: toArticleDto(
+      row.article,
+      row.author,
+      c.get('ctx').mediaEnv,
+      await loadCover(c.get('ctx').db, row.article.coverMediaId),
+    ),
+  })
 })
 
 class HttpError extends Error {

@@ -641,6 +641,21 @@ dmsRoute.get('/:id/messages', async (c) => {
     for (const m of mediaRows) mediaMap.set(m.id, toMediaDto(m, mediaEnv))
   }
 
+  // Batch-load reactions for the page so each bubble renders its chip strip on first paint.
+  const messageIds = rows.map((r) => r.message.id)
+  const reactionMap = new Map<string, Array<{ emoji: string; userId: string }>>()
+  if (messageIds.length > 0) {
+    const reactionRows = await db
+      .select()
+      .from(schema.messageReactions)
+      .where(inArray(schema.messageReactions.messageId, messageIds))
+    for (const r of reactionRows) {
+      const arr = reactionMap.get(r.messageId) ?? []
+      arr.push({ emoji: r.emoji, userId: r.userId })
+      reactionMap.set(r.messageId, arr)
+    }
+  }
+
   const messages = rows.map((r) => ({
     id: r.message.id,
     conversationId: r.message.conversationId,
@@ -650,6 +665,7 @@ dmsRoute.get('/:id/messages', async (c) => {
     sharedPostId: r.message.sharedPostId,
     sharedArticleId: r.message.sharedArticleId,
     media: r.message.mediaId ? mediaMap.get(r.message.mediaId) ?? null : null,
+    reactions: reactionMap.get(r.message.id) ?? [],
     editedAt: r.message.editedAt?.toISOString() ?? null,
     createdAt: r.message.createdAt.toISOString(),
     sender: {
@@ -770,6 +786,7 @@ dmsRoute.post('/:id/messages', async (c) => {
     sharedPostId: message.message.sharedPostId,
     sharedArticleId: message.message.sharedArticleId,
     media: mediaDto,
+    reactions: [] as Array<{ emoji: string; userId: string }>,
     editedAt: message.message.editedAt?.toISOString() ?? null,
     createdAt: message.message.createdAt.toISOString(),
   }
@@ -784,6 +801,185 @@ dmsRoute.post('/:id/messages', async (c) => {
 
   return c.json({ message: payload })
 })
+
+const editMessageSchema = z.object({
+  text: z.string().trim().min(1).max(4000),
+})
+const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000
+
+// Edit a message (sender-only, within a 15-min window). Edits set `editedAt` so the UI can
+// render an "(edited)" marker, and a `message_edited` SSE event lets every member's bubble
+// update in place without a refetch.
+dmsRoute.patch('/:id/messages/:msgId', async (c) => {
+  const session = c.get('session')!
+  const { db, pubsub } = c.get('ctx')
+  const me = session.user.id
+  const conversationId = c.req.param('id')
+  const msgId = c.req.param('msgId')
+  const body = editMessageSchema.parse(await c.req.json())
+
+  const [msg] = await db
+    .select()
+    .from(schema.messages)
+    .where(eq(schema.messages.id, msgId))
+    .limit(1)
+  if (!msg || msg.conversationId !== conversationId) return c.json({ error: 'not_found' }, 404)
+  if (msg.senderId !== me) return c.json({ error: 'forbidden' }, 403)
+  if (msg.deletedAt) return c.json({ error: 'already_deleted' }, 410)
+  if (Date.now() - msg.createdAt.getTime() > MESSAGE_EDIT_WINDOW_MS) {
+    return c.json({ error: 'edit_window_expired' }, 403)
+  }
+
+  const editedAt = new Date()
+  await db
+    .update(schema.messages)
+    .set({ text: body.text, editedAt })
+    .where(eq(schema.messages.id, msgId))
+
+  // Fan-out to every active member.
+  const recipients = await activeMemberIds(db, conversationId)
+  await Promise.all(
+    recipients.map((userId) =>
+      pubsub.publish(dmChannel(userId), {
+        type: 'message_edited',
+        conversationId,
+        messageId: msgId,
+        text: body.text,
+        editedAt: editedAt.toISOString(),
+      }),
+    ),
+  )
+  return c.json({ ok: true, editedAt: editedAt.toISOString() })
+})
+
+// Soft-delete a message. Sender always; group admin can delete anyone's. Bubble renders as
+// "deleted message" placeholder via the SSE event.
+dmsRoute.delete('/:id/messages/:msgId', async (c) => {
+  const session = c.get('session')!
+  const { db, pubsub } = c.get('ctx')
+  const me = session.user.id
+  const conversationId = c.req.param('id')
+  const msgId = c.req.param('msgId')
+
+  const [msg] = await db
+    .select()
+    .from(schema.messages)
+    .where(eq(schema.messages.id, msgId))
+    .limit(1)
+  if (!msg || msg.conversationId !== conversationId) return c.json({ error: 'not_found' }, 404)
+  if (msg.deletedAt) return c.json({ ok: true })
+
+  if (msg.senderId !== me) {
+    // Non-sender can only delete in groups they admin.
+    const conv = await loadConversationForAdmin(db, conversationId, me)
+    if ('error' in conv) return c.json({ error: 'forbidden' }, 403)
+  } else {
+    const membership = await loadMembership(db, conversationId, me)
+    if (!membership) return c.json({ error: 'not_a_member' }, 403)
+  }
+
+  await db
+    .update(schema.messages)
+    .set({ deletedAt: new Date() })
+    .where(eq(schema.messages.id, msgId))
+
+  const recipients = await activeMemberIds(db, conversationId)
+  await Promise.all(
+    recipients.map((userId) =>
+      pubsub.publish(dmChannel(userId), {
+        type: 'message_deleted',
+        conversationId,
+        messageId: msgId,
+      }),
+    ),
+  )
+  return c.json({ ok: true })
+})
+
+const reactionSchema = z.object({
+  emoji: z.string().trim().min(1).max(16),
+})
+
+// Toggle a reaction. Idempotent — second POST of the same emoji removes it. Composite PK on
+// (messageId, userId, emoji) handles dedupe at the DB level.
+dmsRoute.post('/:id/messages/:msgId/reactions', async (c) => {
+  const session = c.get('session')!
+  const { db, pubsub, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'dms.react')
+  const me = session.user.id
+  const conversationId = c.req.param('id')
+  const msgId = c.req.param('msgId')
+  const body = reactionSchema.parse(await c.req.json())
+
+  // Verify membership + message belongs to the convo before mutating.
+  const membership = await loadMembership(db, conversationId, me)
+  if (!membership) return c.json({ error: 'not_a_member' }, 403)
+  const [msg] = await db
+    .select({ id: schema.messages.id })
+    .from(schema.messages)
+    .where(and(eq(schema.messages.id, msgId), eq(schema.messages.conversationId, conversationId)))
+    .limit(1)
+  if (!msg) return c.json({ error: 'not_found' }, 404)
+
+  const [existing] = await db
+    .select()
+    .from(schema.messageReactions)
+    .where(
+      and(
+        eq(schema.messageReactions.messageId, msgId),
+        eq(schema.messageReactions.userId, me),
+        eq(schema.messageReactions.emoji, body.emoji),
+      ),
+    )
+    .limit(1)
+
+  let op: 'add' | 'remove'
+  if (existing) {
+    await db
+      .delete(schema.messageReactions)
+      .where(
+        and(
+          eq(schema.messageReactions.messageId, msgId),
+          eq(schema.messageReactions.userId, me),
+          eq(schema.messageReactions.emoji, body.emoji),
+        ),
+      )
+    op = 'remove'
+  } else {
+    await db
+      .insert(schema.messageReactions)
+      .values({ messageId: msgId, userId: me, emoji: body.emoji })
+    op = 'add'
+  }
+
+  const recipients = await activeMemberIds(db, conversationId)
+  await Promise.all(
+    recipients.map((userId) =>
+      pubsub.publish(dmChannel(userId), {
+        type: 'reaction',
+        conversationId,
+        messageId: msgId,
+        userId: me,
+        emoji: body.emoji,
+        op,
+      }),
+    ),
+  )
+  return c.json({ ok: true, op })
+})
+
+async function activeMemberIds(db: Database, conversationId: string): Promise<Array<string>> {
+  const rows = await db
+    .select({ userId: schema.conversationMembers.userId })
+    .from(schema.conversationMembers)
+    .where(
+      and(
+        eq(schema.conversationMembers.conversationId, conversationId),
+        isNull(schema.conversationMembers.leftAt),
+      ),
+    )
+  return rows.map((r) => r.userId)
+}
 
 // Fire-and-forget typing ping. Frontend debounces at ~one per 3s; we publish to every other
 // active member's channel and that's it — no DB write, ephemeral.

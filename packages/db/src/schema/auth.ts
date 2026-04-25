@@ -41,6 +41,11 @@ export const users = pgTable(
     shadowBannedAt: timestamp('shadow_banned_at', { withTimezone: true }),
     signupIpHash: bytea('signup_ip_hash'),
     twoFactorEnabled: boolean('two_factor_enabled').notNull().default(false),
+    // ActivityPub identity. Generated lazily on first inbound federation request so existing
+    // local-only users don't all need a backfill. Public key is exposed in the actor JSON;
+    // private key signs outbound activities.
+    apPublicKeyPem: text('ap_public_key_pem'),
+    apPrivateKeyPem: text('ap_private_key_pem'),
     // admin plugin (better-auth)
     banned: boolean('banned').notNull().default(false),
     banReason: text('ban_reason'),

@@ -1,4 +1,5 @@
 import PgBoss from 'pg-boss'
+import pino from 'pino'
 import { createMailer } from '@workspace/email'
 import { createDbFromEnv } from '@workspace/db'
 import { createS3 } from '@workspace/media/s3'
@@ -8,6 +9,18 @@ import { handleEmailJob } from './jobs/email.ts'
 import { handleMediaJob } from './jobs/media-process.ts'
 
 const env = loadEnv()
+
+const log = pino({
+  level: env.LOG_LEVEL,
+  ...(env.NODE_ENV === 'production'
+    ? {}
+    : {
+        transport: {
+          target: 'pino-pretty',
+          options: { colorize: true, translateTime: 'HH:MM:ss', ignore: 'pid,hostname' },
+        },
+      }),
+})
 
 const mailer = createMailer({
   from: env.EMAIL_FROM,
@@ -33,7 +46,7 @@ const mediaEnv: MediaEnv = {
 const s3 = createS3(mediaEnv)
 
 const boss = new PgBoss({ connectionString: env.DATABASE_URL })
-boss.on('error', (err) => console.error('pg-boss error:', err))
+boss.on('error', (err) => log.error({ err: err.message }, 'pg_boss_error'))
 
 await boss.start()
 // pg-boss v10 needs queues declared before work/send. Idempotent.
@@ -47,21 +60,24 @@ await boss.work('email.send', { batchSize: 5 }, async (jobs) => {
 
 await boss.work('media.process', { batchSize: 2 }, async (jobs) => {
   for (const job of jobs) {
-    console.log('[media.process] processing', job.data)
+    log.info({ payload: job.data }, 'media_process_start')
     try {
       await handleMediaJob({ db, s3, env: mediaEnv, payload: job.data })
-      console.log('[media.process] done', job.data)
+      log.info({ payload: job.data }, 'media_process_done')
     } catch (err) {
-      console.error('[media.process] failed', job.data, err)
+      log.error(
+        { err: err instanceof Error ? err.stack ?? err.message : err, payload: job.data },
+        'media_process_failed',
+      )
       throw err
     }
   }
 })
 
-console.log('worker ready — queues: email.send, media.process')
+log.info({ queues: ['email.send', 'media.process'] }, 'worker_ready')
 
 const shutdown = async () => {
-  console.log('shutting down worker')
+  log.info('worker_shutdown')
   await boss.stop({ graceful: true })
   process.exit(0)
 }

@@ -101,6 +101,26 @@ usersRoute.get('/:handle/posts', async (c) => {
   const limit = Math.min(Number(c.req.query('limit') ?? 40), 100)
   const cursor = c.req.query('cursor')
 
+  // Pinned post is promoted to the top of the FIRST page only — once you cursor past it,
+  // it's filtered out so it doesn't appear again mid-scroll.
+  let pinnedRow: { post: typeof schema.posts.$inferSelect; author: typeof schema.users.$inferSelect } | null = null
+  if (!cursor) {
+    const [pinned] = await db
+      .select({ post: schema.posts, author: schema.users })
+      .from(schema.posts)
+      .innerJoin(schema.users, eq(schema.users.id, schema.posts.authorId))
+      .where(
+        and(
+          eq(schema.posts.authorId, user.id),
+          isNull(schema.posts.deletedAt),
+          eq(schema.posts.visibility, 'public'),
+          sql`${schema.posts.pinnedAt} IS NOT NULL`,
+        ),
+      )
+      .limit(1)
+    pinnedRow = pinned ?? null
+  }
+
   const rows = await db
     .select({ post: schema.posts, author: schema.users })
     .from(schema.posts)
@@ -110,13 +130,17 @@ usersRoute.get('/:handle/posts', async (c) => {
         eq(schema.posts.authorId, user.id),
         isNull(schema.posts.deletedAt),
         eq(schema.posts.visibility, 'public'),
+        // Don't double-render the pinned post in the date-ordered list.
+        pinnedRow ? sql`${schema.posts.id} <> ${pinnedRow.post.id}` : undefined,
         cursor ? lt(schema.posts.createdAt, new Date(cursor)) : undefined,
       ),
     )
     .orderBy(desc(schema.posts.createdAt))
     .limit(limit)
 
-  const ids = rows.map((r) => r.post.id)
+  // Prepend the pinned row so DTO loaders + render order both see it as the first item.
+  const allRows = pinnedRow ? [pinnedRow, ...rows] : rows
+  const ids = allRows.map((r) => r.post.id)
   const [flags, mediaMap, articleMap, repostMap, quoteMap] = await Promise.all([
     loadViewerFlags(db, viewerId, ids),
     loadPostMedia(db, ids),
@@ -125,17 +149,17 @@ usersRoute.get('/:handle/posts', async (c) => {
       db,
       viewerId,
       env: mediaEnv,
-      repostRows: rows.map((r) => ({ id: r.post.id, repostOfId: r.post.repostOfId })),
+      repostRows: allRows.map((r) => ({ id: r.post.id, repostOfId: r.post.repostOfId })),
     }),
     loadQuoteTargets({
       db,
       viewerId,
       env: mediaEnv,
-      quoteRows: rows.map((r) => ({ id: r.post.id, quoteOfId: r.post.quoteOfId })),
+      quoteRows: allRows.map((r) => ({ id: r.post.id, quoteOfId: r.post.quoteOfId })),
     }),
   ])
-  const posts = rows.map((r) =>
-    toPostDto(
+  const posts = allRows.map((r) => {
+    const dto = toPostDto(
       r.post,
       r.author,
       flags.get(r.post.id),
@@ -144,9 +168,12 @@ usersRoute.get('/:handle/posts', async (c) => {
       articleMap.get(r.post.id),
       repostMap.get(r.post.id),
       quoteMap.get(r.post.id),
-    ),
-  )
-  const nextCursor = posts.length === limit ? posts[posts.length - 1]!.createdAt : null
+    )
+    if (r.post.pinnedAt) (dto as { pinned?: boolean }).pinned = true
+    return dto
+  })
+  // nextCursor advances by the date-ordered tail, not the pinned promotion.
+  const nextCursor = rows.length === limit ? rows[rows.length - 1]!.post.createdAt.toISOString() : null
   return c.json({ posts, nextCursor })
 })
 
@@ -202,6 +229,22 @@ usersRoute.get('/:handle/articles/:slug', async (c) => {
     )
     .limit(1)
   if (!article) return c.json({ error: 'not_found' }, 404)
+  let coverUrl: string | null = null
+  if (article.coverMediaId) {
+    const [cover] = await db
+      .select()
+      .from(schema.media)
+      .where(eq(schema.media.id, article.coverMediaId))
+      .limit(1)
+    const variants = Array.isArray(cover?.variants)
+      ? (cover.variants as Array<{ kind: string; key: string }>)
+      : []
+    const key =
+      variants.find((v) => v.kind === 'large')?.key ??
+      variants.find((v) => v.kind === 'medium')?.key ??
+      null
+    coverUrl = key ? assetUrl(mediaEnv, key) : null
+  }
   return c.json({
     article: {
       id: article.id,
@@ -218,6 +261,8 @@ usersRoute.get('/:handle/articles/:slug', async (c) => {
       likeCount: article.likeCount,
       bookmarkCount: article.bookmarkCount,
       replyCount: article.replyCount,
+      coverMediaId: article.coverMediaId,
+      coverUrl,
       author: {
         id: user.id,
         handle: user.handle,

@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { and, desc, eq, isNull, lt } from '@workspace/db'
+import { and, desc, eq, isNull, lt, sql } from '@workspace/db'
 import { schema } from '@workspace/db'
 import type { HonoEnv } from '../middleware/session.ts'
 import { toPostDto } from '../lib/post-dto.ts'
@@ -10,6 +10,47 @@ import { loadRepostTargets } from '../lib/repost-targets.ts'
 import { loadQuoteTargets } from '../lib/quote-targets.ts'
 
 export const hashtagsRoute = new Hono<HonoEnv>()
+
+const TRENDING_CACHE_KEY = 'trending:hashtags:24h'
+const TRENDING_TTL_SECONDS = 60 * 30
+
+interface TrendingHashtag {
+  tag: string
+  postCount: number
+}
+
+// Top hashtags from the last 24 hours, by distinct post count. Reads from a Redis cache that
+// the worker (or any caller) refreshes; computes inline on miss.
+hashtagsRoute.get('/trending', async (c) => {
+  const { db, cache } = c.get('ctx')
+  const cached = await cache.get<Array<TrendingHashtag>>(TRENDING_CACHE_KEY)
+  if (cached) return c.json({ hashtags: cached, cached: true })
+
+  const fresh = await computeTrending(db)
+  await cache.set(TRENDING_CACHE_KEY, fresh, TRENDING_TTL_SECONDS)
+  return c.json({ hashtags: fresh, cached: false })
+})
+
+async function computeTrending(
+  db: import('@workspace/db').Database,
+): Promise<Array<TrendingHashtag>> {
+  const result = await db.execute(sql`
+    SELECT h.tag, COUNT(DISTINCT ph.post_id)::int AS n
+    FROM ${schema.postHashtags} ph
+    JOIN ${schema.hashtags} h ON h.id = ph.hashtag_id
+    JOIN ${schema.posts} p ON p.id = ph.post_id
+    WHERE p.created_at > now() - interval '24 hours'
+      AND p.deleted_at IS NULL
+      AND p.visibility = 'public'
+    GROUP BY h.tag
+    ORDER BY n DESC
+    LIMIT 10
+  `)
+  return (result as unknown as Array<{ tag: string; n: number }>).map((r) => ({
+    tag: r.tag,
+    postCount: r.n,
+  }))
+}
 
 hashtagsRoute.get('/:tag/posts', async (c) => {
   const { db, mediaEnv } = c.get('ctx')

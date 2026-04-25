@@ -1,9 +1,10 @@
-import { useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { IconPhoto, IconX } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
 import { POST_MAX_LEN } from "@workspace/validators"
 import { ApiError, api } from "../lib/api"
-import { uploadImage } from "../lib/media"
+import { setAltText, uploadImage } from "../lib/media"
+import { clearDraft, draftKey, loadDraft, saveDraft } from "../lib/drafts"
 import { useMe } from "../lib/me"
 import type { Post } from "../lib/api"
 import type { UploadedMedia } from "../lib/media"
@@ -15,6 +16,7 @@ interface PendingAttachment {
   status: "uploading" | "ready" | "failed"
   previewUrl: string
   media?: UploadedMedia
+  altText: string
   error?: string
 }
 
@@ -34,7 +36,12 @@ export function Compose({
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { me } = useMe()
-  const [text, setText] = useState("")
+  const dKey = useMemo(() => draftKey({ replyToId, quoteOfId }), [replyToId, quoteOfId])
+  const [text, setText] = useState(() => loadDraft(dKey))
+  // Persist drafts on every keystroke. Tiny localStorage write — fine without debouncing.
+  useEffect(() => {
+    saveDraft(dKey, text)
+  }, [dKey, text])
   const [attachments, setAttachments] = useState<Array<PendingAttachment>>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -61,7 +68,7 @@ export function Compose({
       const previewUrl = URL.createObjectURL(file)
       setAttachments((prev) => [
         ...prev,
-        { tempId, status: "uploading", previewUrl },
+        { tempId, status: "uploading", previewUrl, altText: "" },
       ])
       try {
         const media = await uploadImage(file)
@@ -101,6 +108,12 @@ export function Compose({
     setError(null)
     setLoading(true)
     try {
+      // Push alt text just before send. Best-effort — failures don't block the post itself.
+      await Promise.all(
+        attachments
+          .filter((a) => a.status === "ready" && a.media && a.altText.trim().length > 0)
+          .map((a) => setAltText(a.media!.id, a.altText).catch(() => {})),
+      )
       const { post } = await api.createPost({
         text: text.trim(),
         replyToId,
@@ -108,6 +121,7 @@ export function Compose({
         mediaIds: readyMediaIds.length > 0 ? readyMediaIds : undefined,
       })
       setText("")
+      clearDraft(dKey)
       attachments.forEach((a) => URL.revokeObjectURL(a.previewUrl))
       setAttachments([])
       onCreated?.(post)
@@ -171,33 +185,46 @@ export function Compose({
         {attachments.length > 0 && (
           <div className="mt-2 grid grid-cols-2 gap-2">
             {attachments.map((a) => (
-              <div
-                key={a.tempId}
-                className="relative aspect-square overflow-hidden rounded-md border border-border bg-muted"
-              >
-                <img
-                  src={a.previewUrl}
-                  alt=""
-                  className="h-full w-full object-cover"
+              <div key={a.tempId} className="space-y-1">
+                <div className="relative aspect-square overflow-hidden rounded-md border border-border bg-muted">
+                  <img
+                    src={a.previewUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                  {a.status === "uploading" && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/50 text-xs text-muted-foreground">
+                      uploading…
+                    </div>
+                  )}
+                  {a.status === "failed" && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-destructive/20 p-2 text-center text-xs text-destructive">
+                      {a.error ?? "failed"}
+                    </div>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeAttachment(a.tempId)}
+                    aria-label="remove attachment"
+                  >
+                    <IconX size={14} />
+                  </Button>
+                </div>
+                <input
+                  value={a.altText}
+                  onChange={(e) =>
+                    setAttachments((prev) =>
+                      prev.map((x) =>
+                        x.tempId === a.tempId ? { ...x, altText: e.target.value } : x,
+                      ),
+                    )
+                  }
+                  disabled={a.status !== "ready"}
+                  placeholder="Describe for screen readers"
+                  maxLength={1000}
+                  className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
                 />
-                {a.status === "uploading" && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-background/50 text-xs text-muted-foreground">
-                    uploading…
-                  </div>
-                )}
-                {a.status === "failed" && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-destructive/20 p-2 text-center text-xs text-destructive">
-                    {a.error ?? "failed"}
-                  </div>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeAttachment(a.tempId)}
-                  aria-label="remove attachment"
-                >
-                  <IconX size={14} />
-                </Button>
               </div>
             ))}
           </div>

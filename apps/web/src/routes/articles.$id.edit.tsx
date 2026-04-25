@@ -4,9 +4,10 @@ import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { ApiError,  api } from "../lib/api"
 import { authClient } from "../lib/auth"
-import { Editor  } from "../components/editor/editor"
-import type {ArticleDto} from "../lib/api";
-import type {EditorPayload} from "../components/editor/editor";
+import { Editor } from "../components/editor/editor"
+import { CoverPicker } from "../components/cover-picker"
+import type { ArticleDto } from "../lib/api"
+import type { EditorPayload } from "../components/editor/editor"
 
 export const Route = createFileRoute("/articles/$id/edit")({ component: EditArticle })
 
@@ -22,6 +23,7 @@ function EditArticle() {
   const [title, setTitle] = useState("")
   const [subtitle, setSubtitle] = useState("")
   const [body, setBody] = useState<EditorPayload | null>(null)
+  const [coverMediaId, setCoverMediaId] = useState<string | null | undefined>(undefined)
   const [saving, setSaving] = useState<"draft" | "publish" | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -50,6 +52,8 @@ function EditArticle() {
         subtitle: subtitle.trim() || undefined,
         bodyJson: body?.stateJson ?? article.bodyJson,
         bodyText: body?.text ?? article.bodyText,
+        // `undefined` = leave alone, `null`/value = explicit change.
+        ...(coverMediaId !== undefined ? { coverMediaId: coverMediaId ?? undefined } : {}),
         status,
       })
       setArticle(updated)
@@ -104,11 +108,12 @@ function EditArticle() {
         </div>
       </header>
       <div className="px-4 pt-6">
+        <CoverPicker initialUrl={article.coverUrl ?? null} onChange={setCoverMediaId} />
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="title"
-          className="h-auto border-0 px-0 text-2xl font-semibold shadow-none focus-visible:ring-0"
+          className="mt-4 h-auto border-0 px-0 text-2xl font-semibold shadow-none focus-visible:ring-0"
           maxLength={150}
         />
         <Input

@@ -67,6 +67,8 @@ export interface PostDto {
   /** Populated on quotes (rows where quoteOfId is set) — the embedded post rendered under the
    *  quoter's commentary. Not recursive: the embed's own quoteOf/repostOf stay undefined. */
   quoteOf?: PostDto
+  /** Set when this row should render with a "Pinned" banner (profile feed first item). */
+  pinned?: boolean
 }
 
 export function toMediaDto(m: MediaRow, env: MediaEnv): MediaDto {

@@ -3,6 +3,7 @@ import { useRouter } from "@tanstack/react-router"
 import {
   IconBan,
   IconDots,
+  IconFlag,
   IconMail,
   IconVolumeOff,
 } from "@tabler/icons-react"
@@ -13,8 +14,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
-import {  api } from "../lib/api"
-import type {PublicProfile} from "../lib/api";
+import { api } from "../lib/api"
+import { ReportDialog } from "./report-dialog"
+import type { PublicProfile } from "../lib/api"
 
 export function ProfileActions({
   profile,
@@ -25,6 +27,7 @@ export function ProfileActions({
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState<null | "follow" | "block" | "mute" | "message">(null)
+  const [reportOpen, setReportOpen] = useState(false)
 
   if (!profile.viewer || !profile.handle) return null
   const h = profile.handle
@@ -117,6 +120,10 @@ export function ProfileActions({
             <IconVolumeOff size={14} stroke={1.75} />
             <span>{v.muting ? "Unmute" : "Mute feed"}</span>
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setReportOpen(true)}>
+            <IconFlag size={14} stroke={1.75} />
+            <span>Report</span>
+          </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
             onClick={() => {
@@ -134,6 +141,13 @@ export function ProfileActions({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <ReportDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        subjectType="user"
+        subjectId={profile.id}
+        subjectLabel={`@${h}`}
+      />
     </div>
   )
 }

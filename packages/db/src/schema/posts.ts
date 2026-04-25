@@ -43,6 +43,9 @@ export const posts = pgTable(
     replyRestriction: replyRestrictionEnum('reply_restriction').notNull().default('anyone'),
     editedAt: timestamp('edited_at', { withTimezone: true }),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    // Timestamp the author last pinned this post to their profile. Nullable; only one pinned
+    // post per author is enforced in the route layer (atomic clear-then-set in a tx).
+    pinnedAt: timestamp('pinned_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     likeCount: integer('like_count').notNull().default(0),
     repostCount: integer('repost_count').notNull().default(0),
@@ -67,6 +70,8 @@ export const posts = pgTable(
     index('posts_text_fts_idx')
       .using('gin', sql`to_tsvector('simple', ${t.text})`)
       .where(sql`${t.deletedAt} IS NULL AND ${t.visibility} = 'public'`),
+    // Lookup pinned post per author (one expected, but indexed nonetheless).
+    index('posts_author_pinned_idx').on(t.authorId).where(sql`${t.pinnedAt} IS NOT NULL`),
   ],
 )
 

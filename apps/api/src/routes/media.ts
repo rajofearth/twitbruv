@@ -107,6 +107,24 @@ export function createMediaRoute(deps: MediaDeps) {
     return c.json({ media: toMediaDto(media, deps.mediaEnv) })
   })
 
+  // Alt-text edits go via PATCH so the same endpoint can grow other small mutations later
+  // (sensitive flagging, etc.) without churning the API surface.
+  const altSchema = z.object({ altText: z.string().trim().max(1000).nullable() })
+  route.patch('/:id/alt', requireAuth(), async (c) => {
+    const session = c.get('session')!
+    const { db } = c.get('ctx')
+    const id = c.req.param('id')
+    const body = altSchema.parse(await c.req.json())
+
+    // Owner-only — alt text is part of the upload's authored content.
+    const [media] = await db.select().from(schema.media).where(eq(schema.media.id, id)).limit(1)
+    if (!media) return c.json({ error: 'not_found' }, 404)
+    if (media.ownerId !== session.user.id) return c.json({ error: 'forbidden' }, 403)
+
+    await db.update(schema.media).set({ altText: body.altText }).where(eq(schema.media.id, id))
+    return c.json({ ok: true })
+  })
+
   return route
 }
 

@@ -603,6 +603,45 @@ postsRoute.patch('/:id', requireAuth(), async (c) => {
 })
 
 // Soft delete (author only). Decrements parent counters.
+// Pin a post to the author's profile. Atomic clear-then-set in a tx so only one pinned post
+// per author exists at a time. Reposts/replies/quotes can't be pinned — only originals.
+postsRoute.post('/:id/pin', requireAuth(), async (c) => {
+  const session = c.get('session')!
+  const { db } = c.get('ctx')
+  const id = c.req.param('id')
+  const me = session.user.id
+
+  const [post] = await db.select().from(schema.posts).where(eq(schema.posts.id, id)).limit(1)
+  if (!post || post.deletedAt) return c.json({ error: 'not_found' }, 404)
+  if (post.authorId !== me) return c.json({ error: 'forbidden' }, 403)
+  if (post.replyToId || post.repostOfId || post.quoteOfId) {
+    return c.json({ error: 'pin_originals_only' }, 400)
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.posts)
+      .set({ pinnedAt: null })
+      .where(and(eq(schema.posts.authorId, me), sql`${schema.posts.pinnedAt} IS NOT NULL`))
+    await tx
+      .update(schema.posts)
+      .set({ pinnedAt: new Date() })
+      .where(eq(schema.posts.id, id))
+  })
+  return c.json({ ok: true })
+})
+
+postsRoute.delete('/:id/pin', requireAuth(), async (c) => {
+  const session = c.get('session')!
+  const { db } = c.get('ctx')
+  const id = c.req.param('id')
+  await db
+    .update(schema.posts)
+    .set({ pinnedAt: null })
+    .where(and(eq(schema.posts.id, id), eq(schema.posts.authorId, session.user.id)))
+  return c.json({ ok: true })
+})
+
 postsRoute.delete('/:id', requireAuth(), async (c) => {
   const session = c.get('session')!
   const { db, cache } = c.get('ctx')

@@ -1,6 +1,13 @@
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { IconPaperclip, IconSettings, IconX } from "@tabler/icons-react"
+import {
+  IconDots,
+  IconPaperclip,
+  IconPencil,
+  IconSettings,
+  IconTrash,
+  IconX,
+} from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
 import {
   Dialog,
@@ -8,6 +15,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@workspace/ui/components/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@workspace/ui/components/dropdown-menu"
 import { api } from "../lib/api"
 import { authClient } from "../lib/auth"
 import { Avatar } from "../components/avatar"
@@ -17,6 +30,7 @@ import {
   MAX_UPLOAD_BYTES,
   compressImage,
   pickVariantUrl,
+  setAltText,
   uploadImage,
 } from "../lib/media"
 import { WEB_URL } from "../lib/env"
@@ -41,6 +55,7 @@ interface Pending {
   id: string
   file: File
   previewUrl: string
+  altText: string
 }
 
 function Thread() {
@@ -111,6 +126,46 @@ function Thread() {
             delete next[event.message.senderId]
             return next
           })
+          break
+        case "message_edited":
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === event.messageId
+                ? { ...m, text: event.text, editedAt: event.editedAt }
+                : m,
+            ),
+          )
+          break
+        case "message_deleted":
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === event.messageId
+                ? { ...m, deletedAt: new Date().toISOString(), text: null, media: null }
+                : m,
+            ),
+          )
+          break
+        case "reaction":
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.id !== event.messageId) return m
+              const exists = m.reactions.some(
+                (r) => r.userId === event.userId && r.emoji === event.emoji,
+              )
+              if (event.op === "add" && !exists) {
+                return { ...m, reactions: [...m.reactions, { userId: event.userId, emoji: event.emoji }] }
+              }
+              if (event.op === "remove" && exists) {
+                return {
+                  ...m,
+                  reactions: m.reactions.filter(
+                    (r) => !(r.userId === event.userId && r.emoji === event.emoji),
+                  ),
+                }
+              }
+              return m
+            }),
+          )
           break
         case "membership":
           // Member added/removed/renamed — refresh metadata so the header is current.
@@ -247,6 +302,7 @@ function Thread() {
       id: crypto.randomUUID(),
       file,
       previewUrl: URL.createObjectURL(file),
+      altText: "",
     })
     setError(null)
   }
@@ -280,6 +336,10 @@ function Thread() {
         }
         const uploaded = await uploadImage(compressed)
         mediaId = uploaded.id
+        if (pending.altText.trim().length > 0) {
+          // Best-effort: don't block sending if alt-text save fails (rare).
+          setAltText(uploaded.id, pending.altText).catch(() => {})
+        }
       }
       const { message } = await api.dmSend(conversationId, {
         text: text || undefined,
@@ -370,6 +430,8 @@ function Thread() {
               group={group}
               me={me}
               members={conversation?.members}
+              conversationId={conversationId}
+              isAdmin={conversation?.myRole === "admin"}
             />
           ))}
         </ul>
@@ -397,8 +459,8 @@ function Thread() {
       </div>
 
       {pending && (
-        <div className="border-t border-border px-3 pt-2">
-          <div className="relative inline-block">
+        <div className="flex items-start gap-3 border-t border-border px-3 pt-2">
+          <div className="relative shrink-0">
             <img
               src={pending.previewUrl}
               alt="attachment preview"
@@ -413,6 +475,15 @@ function Thread() {
               <IconX size={12} stroke={2} />
             </button>
           </div>
+          <input
+            value={pending.altText}
+            onChange={(e) =>
+              setPending((prev) => (prev ? { ...prev, altText: e.target.value } : prev))
+            }
+            placeholder="Describe the image (alt text)"
+            maxLength={1000}
+            className="mt-1 flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+          />
         </div>
       )}
 
@@ -494,10 +565,14 @@ function GroupBlock({
   group,
   me,
   members,
+  conversationId,
+  isAdmin,
 }: {
   group: MessageGroup
   me: string | null
   members: DmConversationDetail["members"] | undefined
+  conversationId: string
+  isAdmin: boolean
 }) {
   const isMine = group.messages[0].senderId === me
   const lastMessage = group.messages[group.messages.length - 1]
@@ -545,6 +620,9 @@ function GroupBlock({
                 isMine={isMine}
                 isFirst={isFirst}
                 isLast={isLast}
+                me={me}
+                conversationId={conversationId}
+                isAdmin={isAdmin}
               />
             )
           })}
@@ -583,49 +661,240 @@ function TypingDots() {
   )
 }
 
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🎉"]
+const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000
+
 function Bubble({
   message,
   isMine,
   isFirst,
   isLast,
+  me,
+  conversationId,
+  isAdmin,
 }: {
   message: DmMessage
   isMine: boolean
   isFirst: boolean
   isLast: boolean
+  me: string | null
+  conversationId: string
+  isAdmin: boolean
 }) {
-  // Tighten corners on the side where bubbles stack so a chain reads as one block.
+  const [editing, setEditing] = useState(false)
+  const [editText, setEditText] = useState(message.text ?? "")
+  const [busy, setBusy] = useState(false)
+  const [showPicker, setShowPicker] = useState(false)
+
+  const isDeleted = Boolean(message.deletedAt)
+  const canEdit =
+    isMine && !isDeleted && Date.now() - new Date(message.createdAt).getTime() < MESSAGE_EDIT_WINDOW_MS
+  const canDelete = !isDeleted && (isMine || isAdmin)
+
   const corners = isMine
     ? `${isFirst ? "rounded-tr-2xl" : "rounded-tr-md"} ${isLast ? "rounded-br-2xl" : "rounded-br-md"} rounded-l-2xl`
     : `${isFirst ? "rounded-tl-2xl" : "rounded-tl-md"} ${isLast ? "rounded-bl-2xl" : "rounded-bl-md"} rounded-r-2xl`
-  const bg = isMine
-    ? "bg-primary text-primary-foreground"
-    : "bg-muted text-foreground"
+  const bg = isDeleted
+    ? "bg-muted/60 text-muted-foreground italic"
+    : isMine
+      ? "bg-primary text-primary-foreground"
+      : "bg-muted text-foreground"
   const time = new Date(message.createdAt).toLocaleTimeString([], {
     hour: "numeric",
     minute: "2-digit",
   })
-  return (
+
+  // Roll up reactions: group by emoji with counts + "did I react with this".
+  const reactionGroups = useMemo(() => {
+    const map = new Map<string, { count: number; mine: boolean }>()
+    for (const r of message.reactions) {
+      const cur = map.get(r.emoji) ?? { count: 0, mine: false }
+      cur.count += 1
+      if (r.userId === me) cur.mine = true
+      map.set(r.emoji, cur)
+    }
+    return Array.from(map.entries()).map(([emoji, data]) => ({ emoji, ...data }))
+  }, [message.reactions, me])
+
+  async function saveEdit() {
+    const next = editText.trim()
+    if (!next || next === message.text || busy) {
+      setEditing(false)
+      return
+    }
+    setBusy(true)
+    try {
+      await api.dmEditMessage(conversationId, message.id, next)
+      setEditing(false)
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function doDelete() {
+    if (!window.confirm("Delete this message?")) return
+    setBusy(true)
+    try {
+      await api.dmDeleteMessage(conversationId, message.id)
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function react(emoji: string) {
+    setShowPicker(false)
+    try {
+      await api.dmToggleReaction(conversationId, message.id, emoji)
+    } catch {
+      /* network blip — server is source of truth */
+    }
+  }
+
+  // Controls render as flex siblings (not absolute) so the hover zone is the entire message
+  // lane, not just the bubble. They stay opacity-0 until the row is hovered, so they don't
+  // visually crowd the chat at rest. The picker stays open once toggled because it's
+  // state-driven, not hover-driven.
+  const controls = !isDeleted && !editing && (
     <div
-      className={`group max-w-full ${corners} ${bg} px-3 py-2 text-sm leading-relaxed`}
-      title={new Date(message.createdAt).toLocaleString()}
+      className={`relative flex shrink-0 items-center gap-1 self-center transition-opacity ${
+        showPicker ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100"
+      }`}
     >
-      {message.media && <MessageImage media={message.media} />}
-      {message.text && (
-        <p className="break-words whitespace-pre-wrap">{message.text}</p>
+      <button
+        type="button"
+        onClick={() => setShowPicker((p) => !p)}
+        aria-label="add reaction"
+        className="flex size-6 items-center justify-center rounded-full bg-background text-xs ring-1 ring-border hover:bg-muted/40"
+      >
+        😀
+      </button>
+      {(canEdit || canDelete) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <button
+                type="button"
+                aria-label="message options"
+                className="flex size-6 items-center justify-center rounded-full bg-background ring-1 ring-border hover:bg-muted/40"
+              >
+                <IconDots size={12} stroke={1.75} />
+              </button>
+            }
+          />
+          <DropdownMenuContent align={isMine ? "end" : "start"} sideOffset={4}>
+            {canEdit && (
+              <DropdownMenuItem onClick={() => setEditing(true)}>
+                <IconPencil size={14} stroke={1.75} />
+                <span>Edit</span>
+              </DropdownMenuItem>
+            )}
+            {canDelete && (
+              <DropdownMenuItem variant="destructive" onClick={doDelete} disabled={busy}>
+                <IconTrash size={14} stroke={1.75} />
+                <span>Delete</span>
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
-      {!message.media && !message.text && (
-        <em className="opacity-70">[unsupported]</em>
-      )}
-      {isLast && (
+      {showPicker && (
         <div
-          className={`mt-1 text-[10px] tabular-nums opacity-60 ${
-            isMine ? "text-right" : ""
+          className={`absolute top-full z-20 mt-1 flex gap-1 rounded-full border border-border bg-background p-1 shadow-md ${
+            isMine ? "right-0" : "left-0"
           }`}
         >
-          {time}
+          {QUICK_REACTIONS.map((e) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => react(e)}
+              className="rounded-full px-1 py-0.5 text-base hover:bg-muted/40"
+            >
+              {e}
+            </button>
+          ))}
         </div>
       )}
+    </div>
+  )
+
+  return (
+    <div
+      className={`group relative flex w-full items-start gap-1 ${isMine ? "justify-end" : "justify-start"}`}
+    >
+      {/* For my messages, controls sit to the LEFT of the bubble (away from screen edge). */}
+      {isMine && controls}
+
+      <div className={`flex max-w-full flex-col gap-1 ${isMine ? "items-end" : "items-start"}`}>
+        <div
+          className={`max-w-full ${corners} ${bg} px-3 py-2 text-sm leading-relaxed`}
+          title={new Date(message.createdAt).toLocaleString()}
+        >
+          {isDeleted ? (
+            <span>deleted message</span>
+          ) : editing ? (
+            <div className="flex flex-col gap-1">
+              <textarea
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault()
+                    saveEdit()
+                  }
+                  if (e.key === "Escape") setEditing(false)
+                }}
+                rows={2}
+                autoFocus
+                className="resize-none rounded bg-background/30 px-2 py-1 text-foreground focus:outline-none"
+              />
+              <div className="flex justify-end gap-2 text-[11px]">
+                <button onClick={() => setEditing(false)} className="opacity-70 hover:opacity-100">
+                  Cancel
+                </button>
+                <button onClick={saveEdit} disabled={busy} className="font-semibold">
+                  Save
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {message.media && <MessageImage media={message.media} />}
+              {message.text && <p className="break-words whitespace-pre-wrap">{message.text}</p>}
+              {!message.media && !message.text && <em className="opacity-70">[unsupported]</em>}
+            </>
+          )}
+          {isLast && !editing && (
+            <div
+              className={`mt-1 text-[10px] tabular-nums opacity-60 ${isMine ? "text-right" : ""}`}
+            >
+              {time}
+              {message.editedAt && <span className="ml-1">· edited</span>}
+            </div>
+          )}
+        </div>
+
+        {reactionGroups.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {reactionGroups.map((g) => (
+              <button
+                key={g.emoji}
+                type="button"
+                onClick={() => react(g.emoji)}
+                className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition ${
+                  g.mine
+                    ? "border-primary/40 bg-primary/10"
+                    : "border-border bg-background hover:bg-muted/40"
+                }`}
+              >
+                <span>{g.emoji}</span>
+                <span className="tabular-nums">{g.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* For other-side messages, controls sit to the RIGHT of the bubble. */}
+      {!isMine && controls}
     </div>
   )
 }

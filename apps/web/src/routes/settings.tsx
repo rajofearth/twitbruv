@@ -113,6 +113,10 @@ function Settings() {
         />
       </section>
 
+      <AccountSection email={me.email} />
+      <SessionsSection currentSessionId={session?.session.id ?? null} />
+      <DangerZone onDeleted={() => router.navigate({ to: "/" })} />
+
       <form onSubmit={onSave} className="space-y-3">
         <h2 className="text-sm font-semibold">Profile details</h2>
         <div className="space-y-1">
@@ -155,4 +159,246 @@ function Settings() {
       </form>
     </main>
   )
+}
+
+function AccountSection({ email }: { email: string }) {
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [pwBusy, setPwBusy] = useState(false)
+  const [pwStatus, setPwStatus] = useState<string | null>(null)
+
+  const [newEmail, setNewEmail] = useState("")
+  const [emBusy, setEmBusy] = useState(false)
+  const [emStatus, setEmStatus] = useState<string | null>(null)
+
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault()
+    if (newPassword.length < 10) {
+      setPwStatus("New password must be at least 10 characters.")
+      return
+    }
+    setPwBusy(true)
+    setPwStatus(null)
+    try {
+      const res = await authClient.changePassword({
+        currentPassword,
+        newPassword,
+        revokeOtherSessions: true,
+      })
+      if (res.error) {
+        setPwStatus(res.error.message ?? "couldn't change password")
+      } else {
+        setPwStatus("password updated — other sessions signed out")
+        setCurrentPassword("")
+        setNewPassword("")
+      }
+    } finally {
+      setPwBusy(false)
+    }
+  }
+
+  async function changeEmail(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newEmail || newEmail === email) return
+    setEmBusy(true)
+    setEmStatus(null)
+    try {
+      const res = await authClient.changeEmail({ newEmail })
+      setEmStatus(
+        res.error ? res.error.message ?? "couldn't update email" : "verification email sent — confirm to switch",
+      )
+    } finally {
+      setEmBusy(false)
+    }
+  }
+
+  return (
+    <section className="space-y-6 border-t border-border pt-6">
+      <h2 className="text-sm font-semibold">Account</h2>
+
+      <form onSubmit={changeEmail} className="space-y-2">
+        <Label htmlFor="newEmail">Email</Label>
+        <p className="text-xs text-muted-foreground">Currently {email}.</p>
+        <Input
+          id="newEmail"
+          type="email"
+          value={newEmail}
+          onChange={(e) => setNewEmail(e.target.value)}
+          placeholder="new@example.com"
+        />
+        {emStatus && <p className="text-xs text-muted-foreground">{emStatus}</p>}
+        <Button type="submit" size="sm" disabled={emBusy || !newEmail || newEmail === email}>
+          Send verification
+        </Button>
+      </form>
+
+      <form onSubmit={changePassword} className="space-y-2">
+        <Label>Change password</Label>
+        <Input
+          type="password"
+          autoComplete="current-password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          placeholder="Current password"
+        />
+        <Input
+          type="password"
+          autoComplete="new-password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          placeholder="New password (10+ characters)"
+        />
+        {pwStatus && <p className="text-xs text-muted-foreground">{pwStatus}</p>}
+        <Button type="submit" size="sm" disabled={pwBusy || !currentPassword || !newPassword}>
+          Update password
+        </Button>
+      </form>
+    </section>
+  )
+}
+
+interface SessionRow {
+  id: string
+  token?: string
+  createdAt?: string | Date
+  ipAddress?: string | null
+  userAgent?: string | null
+}
+
+function SessionsSection({ currentSessionId }: { currentSessionId: string | null }) {
+  const [sessions, setSessions] = useState<Array<SessionRow> | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const refresh = async () => {
+    try {
+      const res = await authClient.listSessions()
+      const data = (res.data ?? []) as Array<SessionRow>
+      setSessions(data)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "couldn't load sessions")
+    }
+  }
+
+  useEffect(() => {
+    refresh().catch(() => {})
+  }, [])
+
+  async function revoke(token: string) {
+    if (busy) return
+    setBusy(true)
+    try {
+      await authClient.revokeSession({ token })
+      await refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function revokeOthers() {
+    if (busy) return
+    if (!window.confirm("Sign out everywhere except this device?")) return
+    setBusy(true)
+    try {
+      await authClient.revokeOtherSessions()
+      await refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="space-y-3 border-t border-border pt-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">Active sessions</h2>
+        <Button size="sm" variant="outline" disabled={busy} onClick={revokeOthers}>
+          Sign out other devices
+        </Button>
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      {!sessions && <p className="text-xs text-muted-foreground">loading…</p>}
+      {sessions && sessions.length === 0 && (
+        <p className="text-xs text-muted-foreground">No sessions found.</p>
+      )}
+      {sessions && sessions.length > 0 && (
+        <ul className="divide-y divide-border rounded-md border border-border">
+          {sessions.map((s) => {
+            const isCurrent = s.id === currentSessionId
+            return (
+              <li key={s.id} className="flex items-start justify-between gap-3 px-3 py-2 text-xs">
+                <div className="min-w-0">
+                  <div className="font-medium">
+                    {s.userAgent ? truncate(s.userAgent, 60) : "Unknown device"}
+                    {isCurrent && (
+                      <span className="ml-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                        this device
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-muted-foreground">
+                    {s.ipAddress && <span>{s.ipAddress} · </span>}
+                    {s.createdAt && <span>started {new Date(s.createdAt).toLocaleString()}</span>}
+                  </div>
+                </div>
+                {!isCurrent && s.token && (
+                  <Button size="sm" variant="ghost" disabled={busy} onClick={() => revoke(s.token!)}>
+                    Revoke
+                  </Button>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function DangerZone({ onDeleted }: { onDeleted: () => void }) {
+  const { me } = useMe()
+  const [confirm, setConfirm] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const requiredText = me?.handle ?? me?.email ?? ""
+  const matches = confirm === requiredText
+
+  async function deleteMe() {
+    if (!matches || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await authClient.deleteUser()
+      if (res.error) {
+        setError(res.error.message ?? "couldn't delete account")
+        return
+      }
+      onDeleted()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="space-y-3 border-t border-destructive/40 pt-6">
+      <h2 className="text-sm font-semibold text-destructive">Danger zone</h2>
+      <p className="text-xs text-muted-foreground">
+        Deleting your account is permanent. Posts, articles, and DMs you authored will be removed.
+        Type <code className="rounded bg-muted px-1">{requiredText}</code> to confirm.
+      </p>
+      <Input
+        value={confirm}
+        onChange={(e) => setConfirm(e.target.value)}
+        placeholder={requiredText}
+      />
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <Button variant="destructive" size="sm" disabled={!matches || busy} onClick={deleteMe}>
+        Delete my account
+      </Button>
+    </section>
+  )
+}
+
+function truncate(s: string, n: number): string {
+  return s.length <= n ? s : `${s.slice(0, n - 1)}…`
 }
