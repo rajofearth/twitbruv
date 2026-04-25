@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
-import { and, desc, eq, isNull, lt, or, sql } from '@workspace/db'
+import { and, desc, eq, inArray, isNull, lt, or, sql } from '@workspace/db'
 import { schema } from '@workspace/db'
 import { requireAuth, type HonoEnv } from '../middleware/session.ts'
 import { notify } from '../lib/notify.ts'
@@ -106,6 +106,13 @@ dmsRoute.get('/', async (c) => {
   if (myConvs.length === 0) return c.json({ conversations: [] })
 
   const convIds = myConvs.map((r) => r.conv.id)
+  // postgres-js sends a JS array as one bound param; using `= ANY($1)` makes Postgres try to
+  // parse the value as an array literal and explode. `IN (...)` with sql.join expands to one
+  // bound param per id, which is what we want.
+  const convIdsList = sql.join(
+    convIds.map((id) => sql`${id}`),
+    sql`, `,
+  )
 
   // Per-convo: other members (for 1:1 we just take the first non-me), latest message,
   // unread count (messages newer than my lastReadMessageId, authored by someone else).
@@ -119,7 +126,7 @@ dmsRoute.get('/', async (c) => {
       .innerJoin(schema.users, eq(schema.users.id, schema.conversationMembers.userId))
       .where(
         and(
-          sql`${schema.conversationMembers.conversationId} = ANY(${convIds})`,
+          inArray(schema.conversationMembers.conversationId, convIds),
           sql`${schema.conversationMembers.userId} <> ${me}`,
           isNull(schema.conversationMembers.leftAt),
         ),
@@ -127,7 +134,7 @@ dmsRoute.get('/', async (c) => {
     db.execute(sql`
       SELECT DISTINCT ON (conversation_id) conversation_id, id, sender_id, kind, text, created_at
       FROM ${schema.messages}
-      WHERE conversation_id = ANY(${convIds}) AND deleted_at IS NULL
+      WHERE conversation_id IN (${convIdsList}) AND deleted_at IS NULL
       ORDER BY conversation_id, created_at DESC
     `),
     db.execute(sql`
@@ -135,7 +142,7 @@ dmsRoute.get('/', async (c) => {
       FROM ${schema.messages} m
       JOIN ${schema.conversationMembers} cm
         ON cm.conversation_id = m.conversation_id AND cm.user_id = ${me}
-      WHERE m.conversation_id = ANY(${convIds})
+      WHERE m.conversation_id IN (${convIdsList})
         AND m.sender_id <> ${me}
         AND m.deleted_at IS NULL
         AND (
