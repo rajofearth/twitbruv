@@ -13,13 +13,13 @@ import {
   useWindowVirtualizer,
 } from "@tanstack/react-virtual"
 import {
-  IconAt,
-  IconHeart,
-  IconMessageCircle,
-  IconQuote,
-  IconRepeat,
-  IconUserPlus,
-} from "@tabler/icons-react"
+  AtIcon,
+  HeartIcon,
+  ChatCircleIcon,
+  QuotesIcon,
+  RepeatIcon,
+  UserPlusIcon,
+} from "@phosphor-icons/react"
 import { Button } from "@workspace/ui/components/button"
 import { Skeleton, SkeletonAvatar } from "@workspace/ui/components/skeleton"
 import { api } from "../lib/api"
@@ -391,7 +391,7 @@ function NotificationRow({ item }: { item: NotificationItem }) {
         <div
           className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full ${iconClass}`}
         >
-          <Icon size={18} stroke={1.75} />
+          <Icon size={18} />
         </div>
         <div className="min-w-0 flex-1 text-sm">
           {actorHandle ? (
@@ -513,20 +513,20 @@ function TargetCard({ post }: { post: Post }) {
 function iconForKind(kind: NotificationItem["kind"]) {
   switch (kind) {
     case "like":
-      return IconHeart
+      return HeartIcon
     case "repost":
-      return IconRepeat
+      return RepeatIcon
     case "reply":
     case "article_reply":
-      return IconMessageCircle
+      return ChatCircleIcon
     case "quote":
-      return IconQuote
+      return QuotesIcon
     case "follow":
-      return IconUserPlus
+      return UserPlusIcon
     case "mention":
-      return IconAt
+      return AtIcon
     default:
-      return IconHeart
+      return HeartIcon
   }
 }
 

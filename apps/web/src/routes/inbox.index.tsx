@@ -1,6 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
-import { IconPencilPlus } from "@tabler/icons-react"
+import { NotePencilIcon } from "@phosphor-icons/react"
 import { Button } from "@workspace/ui/components/button"
 import { Badge } from "@workspace/ui/components/badge"
 import { Skeleton, SkeletonAvatar } from "@workspace/ui/components/skeleton"
@@ -35,7 +35,7 @@ function InboxList() {
           nativeButton={false}
           render={<Link to="/inbox/new" />}
         >
-          <IconPencilPlus size={14} stroke={1.75} />
+          <NotePencilIcon size={14} />
           New
         </Button>
       ),

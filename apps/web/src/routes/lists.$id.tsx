@@ -1,6 +1,6 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { IconLock, IconTrash, IconX } from "@tabler/icons-react"
+import { LockIcon, TrashIcon, XIcon } from "@phosphor-icons/react"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -71,7 +71,7 @@ function ListDetail() {
           <span className="truncate">{list.title}</span>
           {list.isPrivate ? (
             <span className="inline-flex shrink-0 items-center gap-0.5 text-xs font-normal text-muted-foreground">
-              <IconLock size={12} />
+              <LockIcon size={12} />
               Private
             </span>
           ) : null}
@@ -92,7 +92,7 @@ function ListDetail() {
             onClick={removeList}
             className="text-destructive"
           >
-            <IconTrash size={14} /> Delete
+            <TrashIcon size={14} /> Delete
           </Button>
         </div>
       ) : undefined,
@@ -233,7 +233,7 @@ function ManageMembers({
                 className="shrink-0 text-muted-foreground hover:text-destructive"
                 aria-label="Remove"
               >
-                <IconX size={12} stroke={2} />
+                <XIcon size={12} />
               </Button>
             </li>
           ))}

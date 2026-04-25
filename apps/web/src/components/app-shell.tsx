@@ -1,15 +1,15 @@
 import { Link, useLocation, useRouter } from "@tanstack/react-router"
 import {
-  IconBell,
-  IconBookmark,
-  IconChartBar,
-  IconClock,
-  IconHome,
-  IconList,
-  IconMail,
-  IconPencil,
-  IconSearch,
-} from "@tabler/icons-react"
+  BellIcon,
+  BookmarkIcon,
+  ChartBarIcon,
+  ClockIcon,
+  HouseIcon,
+  ListIcon,
+  EnvelopeIcon,
+  PencilIcon,
+  MagnifyingGlassIcon,
+} from "@phosphor-icons/react"
 import {
   Sidebar,
   SidebarContent,
@@ -75,7 +75,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       tooltip="home"
                       render={
                         <Link to="/">
-                          <IconHome />
+                          <HouseIcon />
                           <span>Home</span>
                         </Link>
                       }
@@ -87,7 +87,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       tooltip="search"
                       render={
                         <Link to="/search">
-                          <IconSearch />
+                          <MagnifyingGlassIcon />
                           <span>Search</span>
                         </Link>
                       }
@@ -99,7 +99,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       tooltip="notifications"
                       render={
                         <Link to="/notifications">
-                          <IconBell />
+                          <BellIcon />
                           <span>Notifications</span>
                           {unread > 0 && (
                             <Badge
@@ -119,7 +119,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       tooltip="messages"
                       render={
                         <Link to="/inbox">
-                          <IconMail />
+                          <EnvelopeIcon />
                           <span>Messages</span>
                           {dmUnread > 0 && (
                             <Badge
@@ -139,7 +139,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       tooltip="analytics"
                       render={
                         <Link to="/analytics">
-                          <IconChartBar />
+                          <ChartBarIcon />
                           <span>Analytics</span>
                         </Link>
                       }
@@ -151,7 +151,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       tooltip="bookmarks"
                       render={
                         <Link to="/bookmarks">
-                          <IconBookmark />
+                          <BookmarkIcon />
                           <span>Bookmarks</span>
                         </Link>
                       }
@@ -163,7 +163,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       tooltip="lists"
                       render={
                         <Link to="/lists">
-                          <IconList />
+                          <ListIcon />
                           <span>Lists</span>
                         </Link>
                       }
@@ -175,7 +175,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       tooltip="drafts"
                       render={
                         <Link to="/drafts">
-                          <IconClock />
+                          <ClockIcon />
                           <span>Drafts</span>
                         </Link>
                       }
@@ -187,7 +187,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       tooltip="write article"
                       render={
                         <Link to="/articles/new">
-                          <IconPencil />
+                          <PencilIcon />
                           <span>Write Article</span>
                         </Link>
                       }

@@ -1,6 +1,6 @@
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { IconLock, IconPin, IconPinFilled, IconUsers } from "@tabler/icons-react"
+import { LockIcon, PushPinIcon, UsersIcon } from "@phosphor-icons/react"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -94,13 +94,13 @@ function ListsIndex() {
                   <div className="flex items-center justify-between">
                     <h2 className="flex items-center gap-1.5 text-sm font-semibold">
                       {list.pinnedAt && (
-                        <IconPinFilled size={12} className="text-primary" />
+                        <PushPinIcon size={12} weight="fill" className="text-primary" />
                       )}
                       {list.title}
                     </h2>
                     {list.isPrivate && (
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <IconLock size={12} /> private
+                        <LockIcon size={12} /> private
                       </span>
                     )}
                   </div>
@@ -110,7 +110,7 @@ function ListsIndex() {
                     </p>
                   )}
                   <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                    <IconUsers size={12} />
+                    <UsersIcon size={12} />
                     {list.memberCount}{" "}
                     {list.memberCount === 1 ? "member" : "members"}
                   </p>
@@ -138,9 +138,9 @@ function ListsIndex() {
                   }}
                 >
                   {list.pinnedAt ? (
-                    <IconPinFilled size={14} className="text-primary" />
+                    <PushPinIcon size={14} weight="fill" className="text-primary" />
                   ) : (
-                    <IconPin size={14} />
+                    <PushPinIcon size={14} />
                   )}
                 </Button>
               </li>

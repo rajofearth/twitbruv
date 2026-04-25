@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { IconCamera, IconTrash } from "@tabler/icons-react"
+import { CameraIcon, TrashIcon } from "@phosphor-icons/react"
 import { Button } from "@workspace/ui/components/button"
 import { getPastedImageFiles } from "../lib/clipboard-images"
 import { pickVariantUrl, uploadImage } from "../lib/media"
@@ -79,7 +79,7 @@ export function BannerUpload({
               onClick={() => onChange(null)}
               className="text-destructive hover:underline"
             >
-              <IconTrash className="size-4" /> Remove
+              <TrashIcon className="size-4" /> Remove
             </Button>
           )}
         </div>
@@ -114,7 +114,7 @@ export function BannerUpload({
               : "bg-background/0 opacity-0 group-hover:bg-background/30 group-hover:opacity-100"
           }`}
         >
-          <IconCamera className="size-4" />
+          <CameraIcon className="size-4" />
         </div>
       </Button>
       <input

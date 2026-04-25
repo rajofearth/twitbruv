@@ -1,13 +1,13 @@
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
-  IconDots,
-  IconPaperclip,
-  IconPencil,
-  IconSettings,
-  IconTrash,
-  IconX,
-} from "@tabler/icons-react"
+  DotsThreeIcon,
+  PaperclipIcon,
+  PencilIcon,
+  GearIcon,
+  TrashIcon,
+  XIcon,
+} from "@phosphor-icons/react"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -32,6 +32,7 @@ import { ImageLightbox } from "../components/image-lightbox"
 import { PageEmpty, PageError } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
 import { RichText } from "../components/rich-text"
+import { MacfolioCardFromText } from "../components/macfolio-card"
 import { VerifiedBadge } from "../components/verified-badge"
 import { subscribeToDmStream } from "../lib/dm-stream"
 import {
@@ -357,7 +358,7 @@ function Thread() {
             aria-label="conversation settings"
             onClick={() => setSettingsOpen(true)}
           >
-            <IconSettings size={16} stroke={1.75} />
+            <GearIcon size={16} />
           </Button>
         ) : undefined,
     }
@@ -595,7 +596,7 @@ function Thread() {
                 aria-label="remove attachment"
                 className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-background text-foreground shadow-sm ring-1 ring-border hover:bg-muted"
               >
-                <IconX size={12} stroke={2} />
+                <XIcon size={12} />
               </button>
             </div>
             <Input
@@ -632,7 +633,7 @@ function Thread() {
               disabled={sending}
               onClick={() => fileInputRef.current?.click()}
             >
-              <IconPaperclip size={18} stroke={1.75} />
+              <PaperclipIcon size={18} />
             </Button>
             <Textarea
               ref={textareaRef}
@@ -977,14 +978,14 @@ function Bubble({
                 aria-label="message options"
                 className="flex size-6 items-center justify-center rounded-full bg-background ring-1 ring-border hover:bg-muted/40"
               >
-                <IconDots size={12} stroke={1.75} />
+                <DotsThreeIcon size={12} />
               </button>
             }
           />
           <DropdownMenuContent align={isMine ? "end" : "start"} sideOffset={4}>
             {canEdit && (
               <DropdownMenuItem onClick={() => setEditing(true)}>
-                <IconPencil size={14} stroke={1.75} />
+                <PencilIcon size={14} />
                 <span>Edit</span>
               </DropdownMenuItem>
             )}
@@ -994,7 +995,7 @@ function Bubble({
                 onClick={doDelete}
                 disabled={busy}
               >
-                <IconTrash size={14} stroke={1.75} />
+                <TrashIcon size={14} />
                 <span>Delete</span>
               </DropdownMenuItem>
             )}
@@ -1083,6 +1084,7 @@ function Bubble({
                   <RichText text={message.text} />
                 </p>
               )}
+              {message.text && <MacfolioCardFromText text={message.text} />}
               {!message.media && !message.text && (
                 <em className="opacity-70">[unsupported]</em>
               )}

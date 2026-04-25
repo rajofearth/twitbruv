@@ -1,11 +1,10 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
 import {
-  IconBookmark,
-  IconBookmarkFilled,
-  IconSearch,
-  IconX,
-} from "@tabler/icons-react"
+  BookmarkIcon,
+  MagnifyingGlassIcon,
+  XIcon,
+} from "@phosphor-icons/react"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
@@ -138,9 +137,8 @@ function SearchInner({ initialQuery }: { initialQuery: string }) {
         <div className="border-b border-border">
           <form onSubmit={onSubmit} className="px-4 py-3">
             <div className="relative">
-              <IconSearch
+              <MagnifyingGlassIcon
                 size={14}
-                stroke={1.75}
                 className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-muted-foreground"
               />
               <Input
@@ -161,12 +159,12 @@ function SearchInner({ initialQuery }: { initialQuery: string }) {
                 >
                   {activeSavedId ? (
                     <span className="inline-flex items-center gap-1">
-                      <IconBookmarkFilled size={14} stroke={1.75} />
+                      <BookmarkIcon size={14} weight="fill" />
                       Saved
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1">
-                      <IconBookmark size={14} stroke={1.75} />
+                      <BookmarkIcon size={14} />
                       Save this search
                     </span>
                   )}
@@ -223,7 +221,7 @@ function SearchInner({ initialQuery }: { initialQuery: string }) {
                       }
                     }}
                   >
-                    <IconX size={10} />
+                    <XIcon size={10} />
                   </Button>
                 </span>
               ))}

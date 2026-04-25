@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { IconCamera, IconTrash } from "@tabler/icons-react"
+import { CameraIcon, TrashIcon } from "@phosphor-icons/react"
 import { Button } from "@workspace/ui/components/button"
 import { getPastedImageFiles } from "../lib/clipboard-images"
 import { pickVariantUrl, uploadImage } from "../lib/media"
@@ -100,7 +100,7 @@ export function AvatarUpload({
           className="absolute -right-1 -bottom-1 rounded-full"
           aria-label="upload avatar"
         >
-          <IconCamera className="size-4" />
+          <CameraIcon className="size-4" />
         </Button>
       </div>
       <div className="flex flex-col gap-1 text-xs">
@@ -116,7 +116,7 @@ export function AvatarUpload({
             onClick={() => onChange(null)}
             className="mt-1 self-start text-destructive hover:underline"
           >
-            <IconTrash className="size-4" /> Remove
+            <TrashIcon className="size-4" /> Remove
           </Button>
         )}
       </div>

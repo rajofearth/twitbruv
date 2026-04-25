@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react"
 import { MotionConfig, motion } from "motion/react"
 import {
-  IconArrowLeft,
-  IconMessage,
-  IconPencilPlus,
-  IconPhoto,
-  IconSend,
-  IconX,
-} from "@tabler/icons-react"
+  ArrowLeftIcon,
+  ChatIcon,
+  NotePencilIcon,
+  ImageIcon,
+  PaperPlaneTiltIcon,
+  XIcon,
+} from "@phosphor-icons/react"
 import { Link } from "@tanstack/react-router"
 import { Button } from "@workspace/ui/components/button"
 import { api } from "../lib/api"
@@ -132,7 +132,7 @@ export function ChatWidget() {
         transition={{ duration: 0.2, delay: isExpanded ? 0 : 0.15 }}
         className={`flex size-14 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl shadow-primary/30 ${isExpanded ? "pointer-events-none" : ""} `}
       >
-        <IconMessage className="size-6" />
+        <ChatIcon className="size-6" />
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 flex size-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
             {unreadCount > 9 ? "9+" : unreadCount}
@@ -164,10 +164,10 @@ function ConversationList({
             nativeButton={false}
             render={<Link to="/inbox/new" onClick={onClose} />}
           >
-            <IconPencilPlus size={16} />
+            <NotePencilIcon size={16} />
           </Button>
           <Button size="icon-sm" variant="ghost" onClick={onClose}>
-            <IconX size={16} />
+            <XIcon size={16} />
           </Button>
         </div>
       </header>
@@ -380,11 +380,11 @@ function ChatView({
       )}
       <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
         <Button size="icon-sm" variant="ghost" onClick={onBack}>
-          <IconArrowLeft size={18} />
+          <ArrowLeftIcon size={18} />
         </Button>
         <span className="flex-1 truncate text-sm font-semibold">{title}</span>
         <Button size="icon-sm" variant="ghost" onClick={onClose}>
-          <IconX size={16} />
+          <XIcon size={16} />
         </Button>
       </header>
 
@@ -423,7 +423,7 @@ function ChatView({
               aria-label="remove attachment"
               className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-background text-foreground shadow-sm ring-1 ring-border hover:bg-muted"
             >
-              <IconX size={12} stroke={2} />
+              <XIcon size={12} />
             </button>
           </div>
           <span className="text-xs text-muted-foreground">
@@ -449,7 +449,7 @@ function ChatView({
           onClick={() => fileInputRef.current?.click()}
           disabled={sending}
         >
-          <IconPhoto size={18} />
+          <ImageIcon size={18} />
         </Button>
         <input
           ref={inputRef}
@@ -467,7 +467,7 @@ function ChatView({
           variant="ghost"
           disabled={(!text.trim() && !pending) || sending}
         >
-          <IconSend size={18} />
+          <PaperPlaneTiltIcon size={18} />
         </Button>
       </form>
     </div>

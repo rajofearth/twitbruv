@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { IconPhoto, IconX } from "@tabler/icons-react"
+import { ImageIcon, XIcon } from "@phosphor-icons/react"
 import { Button } from "@workspace/ui/components/button"
 import { getPastedImageFiles } from "../lib/clipboard-images"
 import { compressImage, uploadImage } from "../lib/media"
@@ -107,7 +107,7 @@ export function CoverPicker({
             aria-label="remove cover"
             className="absolute top-2 right-2 size-7 rounded-full bg-background/80 backdrop-blur-sm"
           >
-            <IconX size={14} />
+            <XIcon size={14} />
           </Button>
         </div>
       ) : (
@@ -121,7 +121,7 @@ export function CoverPicker({
               : "border-border text-muted-foreground hover:bg-muted/30"
           }`}
         >
-          <IconPhoto size={20} stroke={1.5} />
+          <ImageIcon size={20} />
           <span>
             {busy
               ? "uploading…"

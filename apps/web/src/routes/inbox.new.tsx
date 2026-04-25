@@ -1,6 +1,6 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { IconX } from "@tabler/icons-react"
+import { XIcon } from "@phosphor-icons/react"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -127,7 +127,7 @@ function NewConversation() {
                     aria-label={`remove ${u.handle ?? u.id}`}
                     className="ml-0.5 text-muted-foreground hover:text-foreground"
                   >
-                    <IconX size={12} stroke={2} />
+                    <XIcon size={12} />
                   </button>
                 </span>
               ))}
