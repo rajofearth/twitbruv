@@ -1,12 +1,30 @@
 import { z } from "zod"
 
+const DEFAULT_AUTH_TRUSTED_ORIGINS =
+  "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001"
+
+function expandLocalDevOrigins(
+  origins: string[],
+  nodeEnv: string
+): string[] {
+  if (nodeEnv !== "development") {
+    return origins
+  }
+  const ports = [3000, 3001, 3002, 5173, 5174, 4173, 8080]
+  const extra: string[] = []
+  for (const p of ports) {
+    extra.push(`http://localhost:${p}`, `http://127.0.0.1:${p}`)
+  }
+  return [...new Set([...origins, ...extra])]
+}
+
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   BETTER_AUTH_SECRET: z.string().min(16),
   BETTER_AUTH_URL: z.string().url().default("http://localhost:3001"),
   AUTH_TRUSTED_ORIGINS: z
     .string()
-    .default("http://localhost:3000,http://localhost:3001")
+    .default(DEFAULT_AUTH_TRUSTED_ORIGINS)
     .transform((s) =>
       s
         .split(",")
@@ -71,5 +89,12 @@ export function loadEnv(): Env {
     console.error("Invalid environment:", parsed.error.flatten().fieldErrors)
     process.exit(1)
   }
-  return parsed.data
+  const data = parsed.data
+  return {
+    ...data,
+    AUTH_TRUSTED_ORIGINS: expandLocalDevOrigins(
+      data.AUTH_TRUSTED_ORIGINS,
+      data.NODE_ENV
+    ),
+  }
 }
