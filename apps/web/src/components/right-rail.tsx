@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router"
+import { APP_NAME } from "../lib/env"
 
 export function RightRail() {
   return (
@@ -18,7 +19,7 @@ export function RightRail() {
         <section className="rounded-xl border border-border bg-card/40 p-4">
           <h2 className="text-sm font-semibold">Open for everyone</h2>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            twotter is free, open-source, and has no AI ranking. See{" "}
+            {APP_NAME} is free, open-source, and has no AI ranking. See{" "}
             <Link to="/search" className="text-primary hover:underline">
               search
             </Link>{" "}

@@ -15,6 +15,7 @@ const envSchema = z.object({
   LOG_LEVEL: z.string().default('info'),
 
   PUBLIC_WEB_URL: z.string().url().default('http://localhost:3000'),
+  APP_NAME: z.string().default('twotter'),
 
   EMAIL_FROM: z.string().default('twotter <noreply@localhost>'),
   EMAIL_PROVIDER: z.enum(['smtp', 'resend']).default('smtp'),

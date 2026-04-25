@@ -14,6 +14,7 @@ export interface AuthConfig {
   secret: string
   trustedOrigins: Array<string>
   cookieDomain?: string
+  appName: string
   sendEmail: (args: {
     to: string
     subject: string
@@ -71,7 +72,7 @@ export function createAuth(config: AuthConfig) {
       sendResetPassword: async ({ user, url }) => {
         await config.sendEmail({
           to: user.email,
-          subject: 'Reset your twotter password',
+          subject: `Reset your ${config.appName} password`,
           template: 'reset',
           data: { url, name: user.name ?? '' },
         })
@@ -83,7 +84,7 @@ export function createAuth(config: AuthConfig) {
       sendVerificationEmail: async ({ user, url }) => {
         await config.sendEmail({
           to: user.email,
-          subject: 'Verify your twotter email',
+          subject: `Verify your ${config.appName} email`,
           template: 'verify',
           data: { url, name: user.name ?? '' },
         })
@@ -123,7 +124,7 @@ export function createAuth(config: AuthConfig) {
         sendMagicLink: async ({ email, url }) => {
           await config.sendEmail({
             to: email,
-            subject: 'Sign in to twotter',
+            subject: `Sign in to ${config.appName}`,
             template: 'magic-link',
             data: { url },
           })

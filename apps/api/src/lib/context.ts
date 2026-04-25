@@ -44,8 +44,9 @@ export async function buildContext(): Promise<AppContext> {
     secret: env.BETTER_AUTH_SECRET,
     trustedOrigins: env.AUTH_TRUSTED_ORIGINS,
     cookieDomain: env.AUTH_COOKIE_DOMAIN,
+    appName: env.APP_NAME,
     sendEmail: async ({ to, subject, template, data }) => {
-      await mailer.send({ to, subject, template, data })
+      await mailer.send({ to, subject, template, data: { ...data, appName: env.APP_NAME } })
     },
     ...(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET
       ? { github: { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET } }

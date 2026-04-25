@@ -1,9 +1,17 @@
 import { Button, Heading, Section, Text } from '@react-email/components'
 import { Layout } from './layout.tsx'
 
-export function VerifyEmail({ url, name }: { url: string; name: string }) {
+export function VerifyEmail({
+  url,
+  name,
+  appName = 'twotter',
+}: {
+  url: string
+  name: string
+  appName?: string
+}) {
   return (
-    <Layout preview="Verify your twotter email">
+    <Layout preview={`Verify your ${appName} email`} appName={appName}>
       <Section>
         <Heading as="h1" style={{ fontSize: 22 }}>
           Confirm your email

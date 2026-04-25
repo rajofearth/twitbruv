@@ -1,9 +1,17 @@
 import { Button, Heading, Section, Text } from '@react-email/components'
 import { Layout } from './layout.tsx'
 
-export function ResetEmail({ url, name }: { url: string; name: string }) {
+export function ResetEmail({
+  url,
+  name,
+  appName = 'twotter',
+}: {
+  url: string
+  name: string
+  appName?: string
+}) {
   return (
-    <Layout preview="Reset your twotter password">
+    <Layout preview={`Reset your ${appName} password`} appName={appName}>
       <Section>
         <Heading as="h1" style={{ fontSize: 22 }}>
           Reset your password

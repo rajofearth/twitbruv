@@ -3,6 +3,7 @@ import { useCallback, useState } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { authClient } from "../lib/auth"
 import { api } from "../lib/api"
+import { APP_NAME } from "../lib/env"
 import { useMe } from "../lib/me"
 import { Compose } from "../components/compose"
 import { Feed } from "../components/feed"
@@ -62,8 +63,8 @@ function Landing() {
         Open-source. Free for everyone. No AI.
       </h1>
       <p className="mt-4 max-w-prose text-sm text-muted-foreground">
-        twotter is a developer-native social platform. Post, write articles, DM,
-        and connect your GitHub or GitLab — without paywalls, trackers, or
+        {APP_NAME} is a developer-native social platform. Post, write articles,
+        DM, and connect your GitHub or GitLab — without paywalls, trackers, or
         black-box rankers.
       </p>
       <div className="mt-8 flex gap-2">

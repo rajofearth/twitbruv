@@ -8,6 +8,7 @@ import {
 import appCss from "@workspace/ui/globals.css?url"
 import { AppShell } from "../components/app-shell"
 import { ThemeProvider, themeBootstrapScript } from "../lib/theme"
+import { APP_NAME } from "../lib/env"
 import { MeProvider } from "../lib/me"
 
 export const Route = createRootRoute({
@@ -15,7 +16,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "twotter" },
+      { title: APP_NAME },
       {
         name: "description",
         content: "Open-source, free-for-everyone social platform.",

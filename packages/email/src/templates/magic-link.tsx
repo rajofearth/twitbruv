@@ -1,9 +1,15 @@
 import { Button, Heading, Section, Text } from '@react-email/components'
 import { Layout } from './layout.tsx'
 
-export function MagicLinkEmail({ url }: { url: string }) {
+export function MagicLinkEmail({
+  url,
+  appName = 'twotter',
+}: {
+  url: string
+  appName?: string
+}) {
   return (
-    <Layout preview="Sign in to twotter">
+    <Layout preview={`Sign in to ${appName}`} appName={appName}>
       <Section>
         <Heading as="h1" style={{ fontSize: 22 }}>
           Your sign-in link
