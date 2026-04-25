@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react"
 import { recordImpression } from "../lib/analytics"
+import { RichText } from "./rich-text"
 import {
   IconBookmark,
   IconBookmarkFilled,
@@ -47,26 +48,6 @@ function relativeTime(iso: string): string {
   const dd = Math.floor(h / 24)
   if (dd < 7) return `${dd}d`
   return new Date(iso).toLocaleDateString()
-}
-
-function linkifyText(text: string) {
-  const regex = /(#[a-z0-9_]+|@[a-z0-9_]+|https?:\/\/\S+)/gi
-  const parts: Array<{
-    type: "text" | "hashtag" | "mention" | "url"
-    value: string
-  }> = []
-  let last = 0
-  for (const match of text.matchAll(regex)) {
-    const idx = match.index
-    if (idx > last) parts.push({ type: "text", value: text.slice(last, idx) })
-    const value = match[0]
-    if (value.startsWith("#")) parts.push({ type: "hashtag", value })
-    else if (value.startsWith("@")) parts.push({ type: "mention", value })
-    else parts.push({ type: "url", value })
-    last = idx + value.length
-  }
-  if (last < text.length) parts.push({ type: "text", value: text.slice(last) })
-  return parts
 }
 
 const EDIT_WINDOW_MS = 5 * 60 * 1000
@@ -405,7 +386,6 @@ export function PostCard({
     )
   }
 
-  const parts = linkifyText(post.text)
   const initial = (post.author.displayName ?? authorHandle ?? "·")
     .slice(0, 1)
     .toUpperCase()
@@ -563,43 +543,7 @@ export function PostCard({
           </div>
         ) : post.articleCard ? null : (
           <p className="wrap-break-words mt-1 text-[15px] leading-relaxed whitespace-pre-wrap">
-            {parts.map((p, i) => {
-              if (p.type === "text") return <span key={i}>{p.value}</span>
-              if (p.type === "hashtag")
-                return (
-                  <Link
-                    key={i}
-                    to="/hashtag/$tag"
-                    params={{ tag: p.value.slice(1) }}
-                    className="text-primary hover:underline"
-                  >
-                    {p.value}
-                  </Link>
-                )
-              if (p.type === "mention") {
-                return (
-                  <Link
-                    key={i}
-                    to="/$handle"
-                    params={{ handle: p.value.slice(1) }}
-                    className="text-primary hover:underline"
-                  >
-                    {p.value}
-                  </Link>
-                )
-              }
-              return (
-                <a
-                  key={i}
-                  href={p.value}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="break-all text-primary hover:underline"
-                >
-                  {p.value}
-                </a>
-              )
-            })}
+            <RichText text={post.text} />
           </p>
         )}
         {post.articleCard && <ArticleCardBlock card={post.articleCard} />}

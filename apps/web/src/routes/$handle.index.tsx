@@ -4,6 +4,7 @@ import { api, ApiError, type PublicProfile } from "../lib/api"
 import { Feed } from "../components/feed"
 import { ProfileActions } from "../components/profile-actions"
 import { ImageLightbox } from "../components/image-lightbox"
+import { RichText } from "../components/rich-text"
 
 export const Route = createFileRoute("/$handle/")({ component: Profile })
 
@@ -93,7 +94,11 @@ function Profile() {
           <h1 className="text-xl font-semibold">{displayName}</h1>
           <p className="text-sm text-muted-foreground">@{user.handle}</p>
         </div>
-        {user.bio && <p className="mt-3 text-sm leading-relaxed">{user.bio}</p>}
+        {user.bio && (
+          <p className="mt-3 text-sm leading-relaxed whitespace-pre-wrap">
+            <RichText text={user.bio} />
+          </p>
+        )}
         <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
           {user.location && <span>{user.location}</span>}
           {user.websiteUrl && (
