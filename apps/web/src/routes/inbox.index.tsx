@@ -5,6 +5,7 @@ import { Button } from "@workspace/ui/components/button"
 import { Skeleton, SkeletonAvatar } from "@workspace/ui/components/skeleton"
 import { api } from "../lib/api"
 import { Avatar } from "../components/avatar"
+import { PageFrame } from "../components/page-frame"
 import { VerifiedBadge } from "../components/verified-badge"
 import { subscribeToDmStream } from "../lib/dm-stream"
 import type { DmConversation, DmMember } from "../lib/api"
@@ -51,6 +52,7 @@ function InboxList() {
   }, [folder])
 
   return (
+    <PageFrame>
     <main>
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm">
         <h1 className="text-base font-semibold">Messages</h1>
@@ -120,6 +122,7 @@ function InboxList() {
         </ul>
       )}
     </main>
+    </PageFrame>
   )
 }
 

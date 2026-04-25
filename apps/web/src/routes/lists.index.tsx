@@ -5,6 +5,7 @@ import { Button } from "@workspace/ui/components/button"
 import { LIST_SLUG_RE, LIST_TITLE_MAX } from "@workspace/validators"
 import { ApiError, api } from "../lib/api"
 import { authClient } from "../lib/auth"
+import { PageFrame } from "../components/page-frame"
 import type { UserList } from "../lib/api"
 
 export const Route = createFileRoute("/lists/")({ component: ListsIndex })
@@ -34,6 +35,7 @@ function ListsIndex() {
   }, [session])
 
   return (
+    <PageFrame>
     <main>
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <div>
@@ -99,6 +101,7 @@ function ListsIndex() {
         </ul>
       )}
     </main>
+    </PageFrame>
   )
 }
 

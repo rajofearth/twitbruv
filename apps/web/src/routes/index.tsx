@@ -7,6 +7,7 @@ import { APP_NAME } from "../lib/env"
 import { useMe } from "../lib/me"
 import { Compose } from "../components/compose"
 import { Feed } from "../components/feed"
+import { PageFrame } from "../components/page-frame"
 import type { Post } from "../lib/api"
 
 export const Route = createFileRoute("/")({ component: Landing })
@@ -23,13 +24,18 @@ function Landing() {
   )
 
   if (isPending) {
-    return <main className="px-4 py-8" />
+    return (
+      <PageFrame>
+        <main className="px-4 py-8" />
+      </PageFrame>
+    )
   }
 
   if (session) {
     const needsHandle = me && !me.handle
     return (
-      <main className="">
+      <PageFrame>
+        <main className="">
         {needsHandle ? (
           <div className="m-4 rounded-md border border-primary/40 bg-primary/5 p-4">
             <h2 className="text-sm font-semibold">
@@ -53,11 +59,13 @@ function Landing() {
         <section className="border-t border-border">
           <Feed load={loadPublic} emptyMessage="No posts yet. Be the first." />
         </section>
-      </main>
+        </main>
+      </PageFrame>
     )
   }
 
   return (
+    <PageFrame>
     <main className="mx-auto max-w-3xl px-4 py-16">
       <h1 className="text-3xl font-semibold tracking-tight">
         Open-source. Free for everyone. No AI.
@@ -104,5 +112,6 @@ function Landing() {
         </li>
       </ul>
     </main>
+    </PageFrame>
   )
 }

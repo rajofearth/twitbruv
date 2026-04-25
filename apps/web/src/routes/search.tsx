@@ -2,6 +2,7 @@ import { Link, createFileRoute } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 import { IconSearch } from "@tabler/icons-react"
 import { Input } from "@workspace/ui/components/input"
+import { PageFrame } from "../components/page-frame"
 import { PostCard } from "../components/post-card"
 import { VerifiedBadge } from "../components/verified-badge"
 import { api } from "../lib/api"
@@ -70,6 +71,7 @@ function Search() {
   }
 
   return (
+    <PageFrame>
     <main className="">
       <header className="border-b border-border px-4 py-3">
         <form onSubmit={onSubmit} className="relative flex-1">
@@ -146,5 +148,6 @@ function Search() {
         </>
       )}
     </main>
+    </PageFrame>
   )
 }

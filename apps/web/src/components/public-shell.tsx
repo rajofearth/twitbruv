@@ -22,8 +22,8 @@ export function PublicShell({ children }: { children: ReactNode }) {
           </Button>
         </nav>
       </header>
-      <div className="flex flex-1 justify-center">
-        <main className="w-full flex-1 border-border md:max-w-[640px] md:border-x">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <main className="flex min-h-0 w-full min-w-0 flex-1 flex-col border-border">
           {children}
         </main>
       </div>

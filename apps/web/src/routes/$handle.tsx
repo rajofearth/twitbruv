@@ -1,4 +1,5 @@
 import { Outlet, createFileRoute } from "@tanstack/react-router"
+import { PageFrame } from "../components/page-frame"
 
 // Parent layout for all /$handle/... routes. Static routes (/login, /settings, /hashtag/:tag)
 // take precedence via TanStack Router's static-before-dynamic matcher; reserved handles
@@ -6,5 +7,9 @@ import { Outlet, createFileRoute } from "@tanstack/react-router"
 export const Route = createFileRoute("/$handle")({ component: HandleLayout })
 
 function HandleLayout() {
-  return <Outlet />
+  return (
+    <PageFrame>
+      <Outlet />
+    </PageFrame>
+  )
 }

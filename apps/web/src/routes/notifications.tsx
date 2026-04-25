@@ -12,6 +12,7 @@ import { Button } from "@workspace/ui/components/button"
 import { Skeleton, SkeletonAvatar } from "@workspace/ui/components/skeleton"
 import {  api } from "../lib/api"
 import { authClient } from "../lib/auth"
+import { PageFrame } from "../components/page-frame"
 import { VerifiedBadge } from "../components/verified-badge"
 import type {NotificationItem} from "../lib/api";
 
@@ -75,6 +76,7 @@ function Notifications() {
   const hasUnread = items.some((n) => !n.readAt)
 
   return (
+    <PageFrame>
     <main>
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm">
         <h1 className="text-base font-semibold">Notifications</h1>
@@ -126,6 +128,7 @@ function Notifications() {
         </ul>
       )}
     </main>
+    </PageFrame>
   )
 }
 

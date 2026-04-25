@@ -6,6 +6,7 @@ import { ApiError, api } from "../lib/api"
 import { authClient } from "../lib/auth"
 import { Avatar } from "../components/avatar"
 import { Feed } from "../components/feed"
+import { PageFrame } from "../components/page-frame"
 import type { PublicUser, UserList, UserListMember } from "../lib/api"
 
 export const Route = createFileRoute("/lists/$id")({ component: ListDetail })
@@ -53,20 +54,25 @@ function ListDetail() {
 
   if (loading) {
     return (
-      <main>
-        <p className="px-4 py-8 text-center text-sm text-muted-foreground">loading…</p>
-      </main>
+      <PageFrame>
+        <main>
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground">loading…</p>
+        </main>
+      </PageFrame>
     )
   }
   if (!list) {
     return (
-      <main>
-        <p className="px-4 py-8 text-center text-sm text-muted-foreground">List not found.</p>
-      </main>
+      <PageFrame>
+        <main>
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground">List not found.</p>
+        </main>
+      </PageFrame>
     )
   }
 
   return (
+    <PageFrame>
     <main>
       <header className="border-b border-border px-4 py-3">
         <div className="flex items-start justify-between gap-2">
@@ -129,6 +135,7 @@ function ListDetail() {
         }
       />
     </main>
+    </PageFrame>
   )
 }
 

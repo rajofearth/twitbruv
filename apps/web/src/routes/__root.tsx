@@ -7,6 +7,7 @@ import {
 
 import appCss from "@workspace/ui/globals.css?url"
 import { AppShell } from "../components/app-shell"
+import { PageFrame } from "../components/page-frame"
 import { ThemeProvider, themeBootstrapScript } from "../lib/theme"
 import { APP_NAME, WEB_URL } from "../lib/env"
 import { MeProvider } from "../lib/me"
@@ -42,12 +43,14 @@ export const Route = createRootRoute({
   }),
   notFoundComponent: () => (
     <AppShell>
-      <main className="mx-auto max-w-3xl p-4 pt-16">
-        <h1 className="text-lg font-semibold">404</h1>
-        <p className="text-sm text-muted-foreground">
-          The requested page could not be found.
-        </p>
-      </main>
+      <PageFrame>
+        <main className="p-4 pt-16">
+          <h1 className="text-lg font-semibold">404</h1>
+          <p className="text-sm text-muted-foreground">
+            The requested page could not be found.
+          </p>
+        </main>
+      </PageFrame>
     </AppShell>
   ),
   shellComponent: RootDocument,

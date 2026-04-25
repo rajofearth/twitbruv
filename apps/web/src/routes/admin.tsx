@@ -1,4 +1,9 @@
-import { Link, Outlet, createFileRoute, useRouter } from "@tanstack/react-router"
+import {
+  Link,
+  Outlet,
+  createFileRoute,
+  useRouter,
+} from "@tanstack/react-router"
 import { useEffect } from "react"
 import { authClient } from "../lib/auth"
 import { useMe } from "../lib/me"
@@ -26,11 +31,11 @@ function AdminLayout() {
   }
 
   return (
-    <div>
+    <div className="mx-auto w-full min-w-0 border-x border-b md:max-w-6xl">
       <header className="sticky top-0 z-10 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm">
         <div className="flex items-baseline justify-between">
           <h1 className="text-base font-semibold">Admin</h1>
-          <span className="text-xs uppercase tracking-wider text-muted-foreground">
+          <span className="text-xs tracking-wider text-muted-foreground uppercase">
             {me.role}
           </span>
         </div>

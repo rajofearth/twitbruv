@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { ApiError, api } from "../lib/api"
 import { authClient } from "../lib/auth"
+import { PageFrame } from "../components/page-frame"
 import type { ScheduledPost } from "../lib/api"
 
 export const Route = createFileRoute("/drafts")({ component: Drafts })
@@ -72,6 +73,7 @@ function Drafts() {
   }
 
   return (
+    <PageFrame>
     <main>
       <header className="border-b border-border px-4 py-3">
         <h1 className="text-base font-semibold">Drafts &amp; scheduled</h1>
@@ -123,6 +125,7 @@ function Drafts() {
         </ul>
       )}
     </main>
+    </PageFrame>
   )
 }
 

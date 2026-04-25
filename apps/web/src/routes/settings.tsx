@@ -11,6 +11,7 @@ import { ClaimHandle } from "../components/claim-handle"
 import { AvatarUpload } from "../components/avatar-upload"
 import { BannerUpload } from "../components/banner-upload"
 import { Avatar } from "../components/avatar"
+import { PageFrame } from "../components/page-frame"
 import { VerifiedBadge } from "../components/verified-badge"
 import type { BlockedUser, MutedUser } from "../lib/api"
 
@@ -83,13 +84,16 @@ function Settings() {
 
   if (isPending || !me) {
     return (
-      <main className="mx-auto max-w-xl px-4 py-8">
-        <p className="text-sm text-muted-foreground">loading…</p>
-      </main>
+      <PageFrame>
+        <main className="mx-auto max-w-xl px-4 py-8">
+          <p className="text-sm text-muted-foreground">loading…</p>
+        </main>
+      </PageFrame>
     )
   }
 
   return (
+    <PageFrame>
     <main className="mx-auto space-y-8 px-4 py-8">
       <header>
         <h1 className="text-xl font-semibold">Settings</h1>
@@ -162,6 +166,7 @@ function Settings() {
         <Button type="submit">Save</Button>
       </form>
     </main>
+    </PageFrame>
   )
 }
 

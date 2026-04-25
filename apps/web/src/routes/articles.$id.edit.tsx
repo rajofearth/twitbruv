@@ -5,6 +5,7 @@ import { Input } from "@workspace/ui/components/input"
 import { ApiError,  api } from "../lib/api"
 import { authClient } from "../lib/auth"
 import { Editor } from "../components/editor/editor"
+import { PageFrame } from "../components/page-frame"
 import { CoverPicker } from "../components/cover-picker"
 import type { ArticleDto } from "../lib/api"
 import type { EditorPayload } from "../components/editor/editor"
@@ -72,20 +73,25 @@ function EditArticle() {
 
   if (loadError) {
     return (
-      <main className="px-4 py-16 text-center">
-        <p className="text-sm text-muted-foreground">article not found</p>
-      </main>
+      <PageFrame>
+        <main className="px-4 py-16 text-center">
+          <p className="text-sm text-muted-foreground">article not found</p>
+        </main>
+      </PageFrame>
     )
   }
   if (!article) {
     return (
-      <main className="px-4 py-16">
-        <p className="text-sm text-muted-foreground">loading…</p>
-      </main>
+      <PageFrame>
+        <main className="px-4 py-16">
+          <p className="text-sm text-muted-foreground">loading…</p>
+        </main>
+      </PageFrame>
     )
   }
 
   return (
+    <PageFrame>
     <main className="">
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <h1 className="text-sm font-semibold text-muted-foreground">
@@ -126,5 +132,6 @@ function EditArticle() {
       </div>
       <Editor initialStateJson={initialStateJson} onChange={setBody} />
     </main>
+    </PageFrame>
   )
 }

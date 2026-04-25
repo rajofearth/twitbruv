@@ -4,6 +4,7 @@ import { Button } from "@workspace/ui/components/button"
 import { ApiError, api } from "../lib/api"
 import { authClient } from "../lib/auth"
 import { Avatar } from "../components/avatar"
+import { PageFrame } from "../components/page-frame"
 import { VerifiedBadge } from "../components/verified-badge"
 import type { InvitePreview } from "../lib/api"
 
@@ -61,14 +62,20 @@ function InvitePage() {
 
   if (error) {
     return (
-      <main className="mx-auto max-w-md px-4 py-16 text-center">
-        <h1 className="text-lg font-semibold">Can't join</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{error}</p>
-      </main>
+      <PageFrame>
+        <main className="mx-auto max-w-md px-4 py-16 text-center">
+          <h1 className="text-lg font-semibold">Can't join</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{error}</p>
+        </main>
+      </PageFrame>
     )
   }
   if (!preview) {
-    return <main className="px-4 py-16 text-center text-sm text-muted-foreground">loading…</main>
+    return (
+      <PageFrame>
+        <main className="px-4 py-16 text-center text-sm text-muted-foreground">loading…</main>
+      </PageFrame>
+    )
   }
 
   const conv = preview.conversation
@@ -84,6 +91,7 @@ function InvitePage() {
       : null
 
   return (
+    <PageFrame>
     <main className="mx-auto max-w-md px-4 py-16">
       <div className="rounded-lg border border-border p-6 text-center">
         <div className="mb-4 flex justify-center -space-x-2">
@@ -116,5 +124,6 @@ function InvitePage() {
         </div>
       </div>
     </main>
+    </PageFrame>
   )
 }

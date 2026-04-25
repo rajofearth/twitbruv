@@ -5,6 +5,7 @@ import { Input } from "@workspace/ui/components/input"
 import { ApiError, api } from "../lib/api"
 import { authClient } from "../lib/auth"
 import { Editor } from "../components/editor/editor"
+import { PageFrame } from "../components/page-frame"
 import { CoverPicker } from "../components/cover-picker"
 import type { EditorPayload } from "../components/editor/editor"
 
@@ -59,6 +60,7 @@ function NewArticle() {
   }
 
   return (
+    <PageFrame>
     <main className="">
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <h1 className="text-sm font-semibold text-muted-foreground">new article</h1>
@@ -91,5 +93,6 @@ function NewArticle() {
       </div>
       <Editor onChange={setBody} />
     </main>
+    </PageFrame>
   )
 }
