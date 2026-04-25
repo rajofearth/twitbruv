@@ -1,5 +1,5 @@
-import type { ComponentProps } from "react"
 import { cn } from "@workspace/ui/lib/utils"
+import type { ComponentProps } from "react"
 
 function Label({ className, ...props }: ComponentProps<"label">) {
   return (

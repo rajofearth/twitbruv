@@ -34,7 +34,7 @@ function ensureSource() {
   if (source) return source
   // withCredentials sends the session cookie so the API can resolve the user.
   source = new EventSource(`${API_URL}/api/dms/stream`, { withCredentials: true })
-  source.addEventListener("dm", (e) => dispatch((e as MessageEvent).data))
+  source.addEventListener("dm", (e) => dispatch((e).data))
   // 'ready' / 'ping' don't need handlers; EventSource stays open on them.
   return source
 }

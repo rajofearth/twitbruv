@@ -1,8 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { Link, createFileRoute } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
-import { api, ApiError, type Post, type Thread } from "../lib/api"
+import { ApiError,   api } from "../lib/api"
 import { PostCard } from "../components/post-card"
 import { Compose } from "../components/compose"
+import type {Post, Thread} from "../lib/api";
 
 export const Route = createFileRoute("/$handle/p/$id")({ component: ThreadView })
 

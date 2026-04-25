@@ -1,9 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { Link, createFileRoute } from "@tanstack/react-router"
 import { useCallback, useEffect, useState } from "react"
 import { Button } from "@workspace/ui/components/button"
-import { api, type AdminUser } from "../lib/api"
+import {  api } from "../lib/api"
 import { useMe } from "../lib/me"
 import { Avatar } from "../components/avatar"
+import type {AdminUser} from "../lib/api";
 
 export const Route = createFileRoute("/admin/users")({ component: AdminUsers })
 

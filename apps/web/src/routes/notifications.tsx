@@ -1,16 +1,17 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
+import { Link, createFileRoute, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useState } from "react"
 import {
+  IconAt,
   IconHeart,
   IconMessageCircle,
   IconQuote,
   IconRepeat,
   IconUserPlus,
-  IconAt,
 } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
-import { api, type NotificationItem } from "../lib/api"
+import {  api } from "../lib/api"
 import { authClient } from "../lib/auth"
+import type {NotificationItem} from "../lib/api";
 
 export const Route = createFileRoute("/notifications")({ component: Notifications })
 

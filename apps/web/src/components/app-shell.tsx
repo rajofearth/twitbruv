@@ -21,6 +21,7 @@ import {
   SidebarProvider,
 } from "@workspace/ui/components/sidebar"
 import { TooltipProvider } from "@workspace/ui/components/tooltip"
+import { useEffect, useState } from "react"
 import { authClient } from "../lib/auth"
 import { api } from "../lib/api"
 import { APP_NAME } from "../lib/env"
@@ -31,7 +32,6 @@ import { PublicShell } from "./public-shell"
 import { UserNav } from "./user-nav"
 import { ComposeFab } from "./compose-fab"
 import type { ReactNode } from "react"
-import { useEffect, useState } from "react"
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { data: session, isPending } = authClient.useSession()

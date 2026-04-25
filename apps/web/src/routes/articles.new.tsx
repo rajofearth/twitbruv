@@ -2,9 +2,10 @@ import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
-import { api, ApiError } from "../lib/api"
+import { ApiError, api } from "../lib/api"
 import { authClient } from "../lib/auth"
-import { Editor, type EditorPayload } from "../components/editor/editor"
+import { Editor  } from "../components/editor/editor"
+import type {EditorPayload} from "../components/editor/editor";
 
 export const Route = createFileRoute("/articles/new")({ component: NewArticle })
 

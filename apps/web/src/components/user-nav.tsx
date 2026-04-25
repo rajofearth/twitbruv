@@ -22,9 +22,9 @@ import {
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
 import { SidebarMenuButton } from "@workspace/ui/components/sidebar"
-import { Avatar } from "./avatar"
 import { authClient } from "../lib/auth"
 import { useTheme } from "../lib/theme"
+import { Avatar } from "./avatar"
 import type { Theme } from "../lib/theme"
 import type { SelfUser } from "../lib/api"
 

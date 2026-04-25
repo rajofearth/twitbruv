@@ -6,6 +6,7 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "lint": "turbo lint",
+    "lint:fix": "turbo lint:fix",
     "format": "turbo format",
     "typecheck": "turbo typecheck",
     "db:push": "bun run --cwd packages/db push",

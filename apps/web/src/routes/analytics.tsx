@@ -1,7 +1,8 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
+import { Link, createFileRoute, useRouter } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
-import { api, type AnalyticsOverview } from "../lib/api"
+import {  api } from "../lib/api"
 import { authClient } from "../lib/auth"
+import type {AnalyticsOverview} from "../lib/api";
 
 export const Route = createFileRoute("/analytics")({ component: Analytics })
 

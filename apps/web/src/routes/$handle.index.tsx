@@ -1,10 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { Link, createFileRoute } from "@tanstack/react-router"
 import { useCallback, useEffect, useState } from "react"
-import { api, ApiError, type PublicProfile } from "../lib/api"
+import { ApiError,  api } from "../lib/api"
 import { Feed } from "../components/feed"
 import { ProfileActions } from "../components/profile-actions"
 import { ImageLightbox } from "../components/image-lightbox"
 import { RichText } from "../components/rich-text"
+import type {PublicProfile} from "../lib/api";
 
 export const Route = createFileRoute("/$handle/")({ component: Profile })
 

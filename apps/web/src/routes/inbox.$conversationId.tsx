@@ -1,10 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { Link, createFileRoute } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@workspace/ui/components/button"
-import { api, type DmMessage } from "../lib/api"
+import {  api } from "../lib/api"
 import { authClient } from "../lib/auth"
 import { Avatar } from "../components/avatar"
 import { subscribeToDmStream } from "../lib/dm-stream"
+import type {DmMessage} from "../lib/api";
 
 export const Route = createFileRoute("/inbox/$conversationId")({ component: Thread })
 
@@ -69,7 +70,7 @@ function Thread() {
   // Mark-read: bump the high-water-mark whenever the latest visible message changes.
   useEffect(() => {
     if (messages.length === 0) return
-    const latestId = messages[messages.length - 1]!.id
+    const latestId = messages[messages.length - 1].id
     if (latestId === lastSeenIdRef.current) return
     lastSeenIdRef.current = latestId
     api.dmMarkRead(conversationId, latestId).catch(() => {})
@@ -137,8 +138,8 @@ function Thread() {
         <ul className="space-y-2">
           {messages.map((m, i) => {
             const isMine = m.senderId === me
-            const prev = messages[i - 1]
-            const showAvatar = !isMine && (!prev || prev.senderId !== m.senderId)
+            const showAvatar =
+              !isMine && (i === 0 || messages[i - 1].senderId !== m.senderId)
             return (
               <li
                 key={m.id}
@@ -184,7 +185,7 @@ function Thread() {
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault()
-              send(e as unknown as React.FormEvent)
+              send(e)
             }
           }}
           className="flex-1 resize-none rounded-md border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"

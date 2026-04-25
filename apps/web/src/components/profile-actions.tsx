@@ -13,7 +13,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
-import { api, type PublicProfile } from "../lib/api"
+import {  api } from "../lib/api"
+import type {PublicProfile} from "../lib/api";
 
 export function ProfileActions({
   profile,
@@ -40,8 +41,8 @@ export function ProfileActions({
     }
   }
 
-  async function run<K extends "follow" | "block" | "mute">(
-    key: K,
+  async function run<TKey extends "follow" | "block" | "mute">(
+    key: TKey,
     next: boolean,
     op: () => Promise<unknown>,
     flag: keyof NonNullable<PublicProfile["viewer"]>,

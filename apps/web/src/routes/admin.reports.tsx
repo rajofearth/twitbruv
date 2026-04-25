@@ -1,7 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { Link, createFileRoute } from "@tanstack/react-router"
 import { useCallback, useEffect, useState } from "react"
 import { Button } from "@workspace/ui/components/button"
-import { api, type AdminReport, type ReportStatus } from "../lib/api"
+import {   api } from "../lib/api"
+import type {AdminReport, ReportStatus} from "../lib/api";
 
 export const Route = createFileRoute("/admin/reports")({ component: AdminReports })
 

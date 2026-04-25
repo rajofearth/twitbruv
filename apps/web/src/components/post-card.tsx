@@ -1,7 +1,5 @@
 import { Link } from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react"
-import { recordImpression } from "../lib/analytics"
-import { RichText } from "./rich-text"
 import {
   IconBookmark,
   IconBookmarkFilled,
@@ -29,8 +27,10 @@ import {
   DialogTitle,
 } from "@workspace/ui/components/dialog"
 import { POST_MAX_LEN } from "@workspace/validators"
+import { recordImpression } from "../lib/analytics"
 import { authClient } from "../lib/auth"
 import { ApiError, api } from "../lib/api"
+import { RichText } from "./rich-text"
 import { Avatar } from "./avatar"
 import { ImageLightbox } from "./image-lightbox"
 import { Compose } from "./compose"
@@ -168,7 +168,7 @@ function MediaGrid({ media }: { media: NonNullable<Post["media"]> }) {
   const gallery = media.flatMap((m) => {
     if (m.processingState !== "ready") return []
     const full = pickLargest(m)
-    return full ? [{ id: m.id, src: full.url, alt: m.altText ?? "" }] : []
+    return [{ id: m.id, src: full.url, alt: m.altText ?? "" }]
   })
   return (
     <div className={`mt-2 grid gap-1 overflow-hidden rounded-md ${cols}`}>
@@ -335,7 +335,7 @@ export function PostCard({
       return
     }
     const prev = post
-    emit({ ...post, ...next } as Post)
+    emit({ ...post, ...next })
     setBusy(true)
     try {
       await op()

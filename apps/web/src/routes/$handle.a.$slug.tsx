@@ -1,9 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { Link, createFileRoute } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
-import { api, ApiError, type ArticleDto } from "../lib/api"
+import { Button } from "@workspace/ui/components/button"
+import { ApiError,  api } from "../lib/api"
 import { Editor } from "../components/editor/editor"
 import { authClient } from "../lib/auth"
-import { Button } from "@workspace/ui/components/button"
+import type {ArticleDto} from "../lib/api";
 
 export const Route = createFileRoute("/$handle/a/$slug")({ component: ArticleView })
 

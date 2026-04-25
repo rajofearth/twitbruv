@@ -1,8 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { Link, createFileRoute } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
-import { api, type DmConversation } from "../lib/api"
+import {  api } from "../lib/api"
 import { Avatar } from "../components/avatar"
 import { subscribeToDmStream } from "../lib/dm-stream"
+import type {DmConversation} from "../lib/api";
 
 export const Route = createFileRoute("/inbox/")({ component: InboxList })
 
@@ -60,7 +61,9 @@ function InboxList() {
 }
 
 function ConversationRow({ conversation }: { conversation: DmConversation }) {
-  const other = conversation.members[0]
+  // .at() returns the proper `T | undefined` type so the `?.` chains below stay meaningful;
+  // bare `members[0]` is typed as never-undefined under default tsconfig settings.
+  const other = conversation.members.at(0)
   const title =
     conversation.title ||
     other?.displayName ||
