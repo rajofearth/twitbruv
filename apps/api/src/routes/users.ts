@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { and, desc, eq, isNull, lt, sql } from '@workspace/db'
 import { schema } from '@workspace/db'
+import { assetUrl } from '@workspace/media/s3'
 import type { HonoEnv } from '../middleware/session.ts'
 import { requireAuth } from '../middleware/session.ts'
 import { toPostDto } from '../lib/post-dto.ts'
@@ -26,7 +27,7 @@ async function resolveHandle(db: HonoEnv['Variables']['ctx']['db'], raw: string)
 
 // Public user profile, with counts + viewer-relative flags.
 usersRoute.get('/:handle', async (c) => {
-  const { db } = c.get('ctx')
+  const { db, mediaEnv } = c.get('ctx')
   const viewerId = c.get('session')?.user.id
   const user = await resolveHandle(db, c.req.param('handle'))
   if (!user) return c.json({ error: 'not_found' }, 404)
@@ -76,8 +77,8 @@ usersRoute.get('/:handle', async (c) => {
       bio: user.bio,
       location: user.location,
       websiteUrl: user.websiteUrl,
-      avatarUrl: user.avatarUrl,
-      bannerUrl: user.bannerUrl,
+      avatarUrl: assetUrl(mediaEnv, user.avatarUrl),
+      bannerUrl: assetUrl(mediaEnv, user.bannerUrl),
       isVerified: user.isVerified,
       isBot: user.isBot,
       createdAt: user.createdAt,
@@ -184,7 +185,7 @@ usersRoute.get('/:handle/articles', async (c) => {
 
 // Public article by author + slug.
 usersRoute.get('/:handle/articles/:slug', async (c) => {
-  const { db } = c.get('ctx')
+  const { db, mediaEnv } = c.get('ctx')
   const user = await resolveHandle(db, c.req.param('handle'))
   if (!user) return c.json({ error: 'not_found' }, 404)
   const slug = c.req.param('slug')
@@ -221,7 +222,7 @@ usersRoute.get('/:handle/articles/:slug', async (c) => {
         id: user.id,
         handle: user.handle,
         displayName: user.displayName,
-        avatarUrl: user.avatarUrl,
+        avatarUrl: assetUrl(mediaEnv, user.avatarUrl),
         isVerified: user.isVerified,
       },
     },
@@ -230,7 +231,7 @@ usersRoute.get('/:handle/articles/:slug', async (c) => {
 
 // Followers list (paginated).
 usersRoute.get('/:handle/followers', async (c) => {
-  const { db } = c.get('ctx')
+  const { db, mediaEnv } = c.get('ctx')
   const user = await resolveHandle(db, c.req.param('handle'))
   if (!user) return c.json({ error: 'not_found' }, 404)
   const limit = Math.min(Number(c.req.query('limit') ?? 40), 100)
@@ -250,13 +251,13 @@ usersRoute.get('/:handle/followers', async (c) => {
     .orderBy(desc(schema.follows.createdAt))
     .limit(limit)
 
-  const users = rows.map((r) => publicUser(r.user))
+  const users = rows.map((r) => publicUser(r.user, mediaEnv))
   const nextCursor = rows.length === limit ? rows[rows.length - 1]!.follow.createdAt.toISOString() : null
   return c.json({ users, nextCursor })
 })
 
 usersRoute.get('/:handle/following', async (c) => {
-  const { db } = c.get('ctx')
+  const { db, mediaEnv } = c.get('ctx')
   const user = await resolveHandle(db, c.req.param('handle'))
   if (!user) return c.json({ error: 'not_found' }, 404)
   const limit = Math.min(Number(c.req.query('limit') ?? 40), 100)
@@ -276,7 +277,7 @@ usersRoute.get('/:handle/following', async (c) => {
     .orderBy(desc(schema.follows.createdAt))
     .limit(limit)
 
-  const users = rows.map((r) => publicUser(r.user))
+  const users = rows.map((r) => publicUser(r.user, mediaEnv))
   const nextCursor = rows.length === limit ? rows[rows.length - 1]!.follow.createdAt.toISOString() : null
   return c.json({ users, nextCursor })
 })
@@ -401,14 +402,17 @@ usersRoute.delete('/:handle/mute', requireAuth(), async (c) => {
   return c.json({ ok: true })
 })
 
-function publicUser(u: typeof schema.users.$inferSelect) {
+function publicUser(
+  u: typeof schema.users.$inferSelect,
+  env: import('@workspace/media/env').MediaEnv,
+) {
   return {
     id: u.id,
     handle: u.handle,
     displayName: u.displayName,
     bio: u.bio,
-    avatarUrl: u.avatarUrl,
-    bannerUrl: u.bannerUrl,
+    avatarUrl: assetUrl(env, u.avatarUrl),
+    bannerUrl: assetUrl(env, u.bannerUrl),
     isVerified: u.isVerified,
     isBot: u.isBot,
     createdAt: u.createdAt,

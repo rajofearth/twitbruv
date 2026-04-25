@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { and, desc, eq, isNull, lt } from '@workspace/db'
 import { schema } from '@workspace/db'
 import { updateProfileSchema, claimHandleSchema } from '@workspace/validators'
+import { assetUrl, extractKey } from '@workspace/media/s3'
 import { requireAuth, type HonoEnv } from '../middleware/session.ts'
 import { isReservedHandle } from '../lib/handles.ts'
 import { toPostDto } from '../lib/post-dto.ts'
@@ -20,7 +21,7 @@ meRoute.get('/', async (c) => {
   const { db } = c.get('ctx')
   const [user] = await db.select().from(schema.users).where(eq(schema.users.id, session.user.id)).limit(1)
   if (!user) return c.json({ error: 'not_found' }, 404)
-  return c.json({ user: toSelfDto(user) })
+  return c.json({ user: toSelfDto(user, c.get('ctx').mediaEnv) })
 })
 
 meRoute.patch('/', async (c) => {
@@ -37,8 +38,11 @@ meRoute.patch('/', async (c) => {
   if (has('bio')) patch.bio = body.bio ?? null
   if (has('location')) patch.location = body.location ?? null
   if (has('websiteUrl')) patch.websiteUrl = body.websiteUrl || null
-  if (has('avatarUrl')) patch.avatarUrl = body.avatarUrl || null
-  if (has('bannerUrl')) patch.bannerUrl = body.bannerUrl || null
+  // Store the bare object key so we never have to migrate when the asset host changes.
+  if (has('avatarUrl'))
+    patch.avatarUrl = body.avatarUrl ? extractKey(c.get('ctx').mediaEnv, body.avatarUrl) : null
+  if (has('bannerUrl'))
+    patch.bannerUrl = body.bannerUrl ? extractKey(c.get('ctx').mediaEnv, body.bannerUrl) : null
   if (has('birthday')) patch.birthday = body.birthday || null
   if (has('timezone')) patch.timezone = body.timezone ?? null
   if (has('locale')) patch.locale = body.locale ?? 'en'
@@ -49,7 +53,7 @@ meRoute.patch('/', async (c) => {
     .where(eq(schema.users.id, session.user.id))
     .returning()
   if (!user) return c.json({ error: 'not_found' }, 404)
-  return c.json({ user: toSelfDto(user) })
+  return c.json({ user: toSelfDto(user, c.get('ctx').mediaEnv) })
 })
 
 meRoute.post('/handle', async (c) => {
@@ -71,7 +75,7 @@ meRoute.post('/handle', async (c) => {
     .where(eq(schema.users.id, session.user.id))
     .returning()
   if (!user) return c.json({ error: 'not_found' }, 404)
-  return c.json({ user: toSelfDto(user) })
+  return c.json({ user: toSelfDto(user, c.get('ctx').mediaEnv) })
 })
 
 // Viewer's bookmarked posts, newest bookmark first.
@@ -130,7 +134,10 @@ meRoute.get('/bookmarks', async (c) => {
   return c.json({ posts, nextCursor })
 })
 
-function toSelfDto(u: typeof schema.users.$inferSelect) {
+function toSelfDto(
+  u: typeof schema.users.$inferSelect,
+  env: import('@workspace/media/env').MediaEnv,
+) {
   return {
     id: u.id,
     email: u.email,
@@ -140,8 +147,8 @@ function toSelfDto(u: typeof schema.users.$inferSelect) {
     bio: u.bio,
     location: u.location,
     websiteUrl: u.websiteUrl,
-    avatarUrl: u.avatarUrl,
-    bannerUrl: u.bannerUrl,
+    avatarUrl: assetUrl(env, u.avatarUrl),
+    bannerUrl: assetUrl(env, u.bannerUrl),
     birthday: u.birthday,
     isVerified: u.isVerified,
     isBot: u.isBot,

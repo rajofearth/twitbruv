@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono'
 import { z } from 'zod'
 import { and, desc, eq, ilike, or, sql } from '@workspace/db'
 import { schema } from '@workspace/db'
+import { assetUrl } from '@workspace/media/s3'
 import { requireAdmin, requireOwner, type HonoEnv, type Role } from '../middleware/session.ts'
 
 export const adminRoute = new Hono<HonoEnv>()
@@ -17,7 +18,7 @@ const listQuery = z.object({
 
 // List/search users. Cursor is the ISO timestamp of the previous page's last createdAt.
 adminRoute.get('/users', async (c) => {
-  const { db } = c.get('ctx')
+  const { db, mediaEnv } = c.get('ctx')
   const { q, cursor, limit } = listQuery.parse(c.req.query())
 
   const filters: Array<unknown> = []
@@ -40,7 +41,7 @@ adminRoute.get('/users', async (c) => {
     email: u.email,
     handle: u.handle,
     displayName: u.displayName,
-    avatarUrl: u.avatarUrl,
+    avatarUrl: assetUrl(mediaEnv, u.avatarUrl),
     role: u.role as Role,
     banned: u.banned,
     banReason: u.banReason,
@@ -56,7 +57,7 @@ adminRoute.get('/users', async (c) => {
 
 // Detailed view: user + recent posts + open reports filed against them.
 adminRoute.get('/users/:id', async (c) => {
-  const { db } = c.get('ctx')
+  const { db, mediaEnv } = c.get('ctx')
   const id = c.req.param('id')
 
   const [user] = await db.select().from(schema.users).where(eq(schema.users.id, id)).limit(1)
@@ -95,8 +96,8 @@ adminRoute.get('/users/:id', async (c) => {
       handle: user.handle,
       displayName: user.displayName,
       bio: user.bio,
-      avatarUrl: user.avatarUrl,
-      bannerUrl: user.bannerUrl,
+      avatarUrl: assetUrl(mediaEnv, user.avatarUrl),
+      bannerUrl: assetUrl(mediaEnv, user.bannerUrl),
       role: user.role as Role,
       banned: user.banned,
       banReason: user.banReason,
@@ -272,7 +273,7 @@ const reportsQuery = z.object({
 })
 
 adminRoute.get('/reports', async (c) => {
-  const { db } = c.get('ctx')
+  const { db, mediaEnv } = c.get('ctx')
   const { status, cursor, limit } = reportsQuery.parse(c.req.query())
 
   const filters: Array<unknown> = []
@@ -302,7 +303,7 @@ adminRoute.get('/reports', async (c) => {
           id: r.reporter.id,
           handle: r.reporter.handle,
           displayName: r.reporter.displayName,
-          avatarUrl: r.reporter.avatarUrl,
+          avatarUrl: assetUrl(mediaEnv, r.reporter.avatarUrl),
         }
       : null,
   }))

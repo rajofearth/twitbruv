@@ -3,6 +3,7 @@ import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
 import { and, desc, eq, inArray, isNull, lt, or, sql } from '@workspace/db'
 import { schema } from '@workspace/db'
+import { assetUrl } from '@workspace/media/s3'
 import { requireAuth, type HonoEnv } from '../middleware/session.ts'
 import { notify } from '../lib/notify.ts'
 import { dmChannel } from '../lib/pubsub.ts'
@@ -81,7 +82,7 @@ dmsRoute.get('/stream', async (c) => {
 // List my conversations with last-message preview, other-member info (1:1), and unread count.
 dmsRoute.get('/', async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, mediaEnv } = c.get('ctx')
   const me = session.user.id
 
   const myConvs = await db
@@ -175,7 +176,7 @@ dmsRoute.get('/', async (c) => {
       id: u.id,
       handle: u.handle,
       displayName: u.displayName,
-      avatarUrl: u.avatarUrl,
+      avatarUrl: assetUrl(mediaEnv, u.avatarUrl),
       isVerified: u.isVerified,
     }))
     const latest = latestByConv.get(r.conv.id)
@@ -279,7 +280,7 @@ dmsRoute.post('/', async (c) => {
 // Paginated message history for a conversation. Returned newest-first; clients reverse for display.
 dmsRoute.get('/:id/messages', async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, mediaEnv } = c.get('ctx')
   const me = session.user.id
   const conversationId = c.req.param('id')
   const limit = Math.min(Number(c.req.query('limit') ?? 50), 100)
@@ -316,7 +317,7 @@ dmsRoute.get('/:id/messages', async (c) => {
       id: r.sender.id,
       handle: r.sender.handle,
       displayName: r.sender.displayName,
-      avatarUrl: r.sender.avatarUrl,
+      avatarUrl: assetUrl(mediaEnv, r.sender.avatarUrl),
       isVerified: r.sender.isVerified,
     },
   }))

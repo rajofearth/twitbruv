@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { and, desc, eq, inArray, isNull, lt, sql } from '@workspace/db'
 import { schema } from '@workspace/db'
+import { assetUrl } from '@workspace/media/s3'
 import { requireAuth, type HonoEnv } from '../middleware/session.ts'
 
 export const notificationsRoute = new Hono<HonoEnv>()
@@ -21,7 +22,7 @@ notificationsRoute.get('/unread-count', async (c) => {
 
 notificationsRoute.get('/', async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, mediaEnv } = c.get('ctx')
   const limit = Math.min(Number(c.req.query('limit') ?? 40), 100)
   const cursor = c.req.query('cursor')
   const unreadOnly = c.req.query('unread') === '1'
@@ -55,7 +56,7 @@ notificationsRoute.get('/', async (c) => {
           id: r.actor.id,
           handle: r.actor.handle,
           displayName: r.actor.displayName,
-          avatarUrl: r.actor.avatarUrl,
+          avatarUrl: assetUrl(mediaEnv, r.actor.avatarUrl),
           isVerified: r.actor.isVerified,
         }
       : null,

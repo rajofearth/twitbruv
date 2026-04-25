@@ -1,6 +1,6 @@
 import { schema } from '@workspace/db'
 import type { MediaEnv } from '@workspace/media/env'
-import { publicUrl } from '@workspace/media/s3'
+import { assetUrl, publicUrl } from '@workspace/media/s3'
 import type { ArticleCard } from './article-cards.ts'
 
 type PostRow = typeof schema.posts.$inferSelect
@@ -118,7 +118,7 @@ export function toPostDto(
       id: author.id,
       handle: author.handle,
       displayName: author.displayName,
-      avatarUrl: author.avatarUrl,
+      avatarUrl: env ? assetUrl(env, author.avatarUrl) : author.avatarUrl,
       isVerified: author.isVerified,
       isBot: author.isBot,
     },

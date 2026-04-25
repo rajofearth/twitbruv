@@ -66,6 +66,9 @@ export async function buildContext(): Promise<AppContext> {
     S3_SECRET_ACCESS_KEY: env.S3_SECRET_ACCESS_KEY,
     S3_BUCKET: env.S3_BUCKET,
     S3_PUBLIC_URL: env.S3_PUBLIC_URL,
+    // Route asset URLs through our signing proxy. The browser hits this URL, the API mints a
+    // short-lived signed S3 URL, then 302-redirects. Stable URLs on our domain, private bucket.
+    MEDIA_PROXY_BASE: `${env.BETTER_AUTH_URL.replace(/\/$/, '')}/api/m`,
   }
   const s3 = createS3(mediaEnv)
 

@@ -2,6 +2,8 @@ import { Hono } from 'hono'
 import { and, desc, eq, isNull, lt } from '@workspace/db'
 import { schema } from '@workspace/db'
 import { createArticleSchema, updateArticleSchema } from '@workspace/validators'
+import { assetUrl } from '@workspace/media/s3'
+import type { MediaEnv } from '@workspace/media/env'
 import { requireAuth, type HonoEnv } from '../middleware/session.ts'
 import { slugify, uniqueSlugForAuthor } from '../lib/slug.ts'
 
@@ -18,7 +20,11 @@ function wordCount(text: string) {
   return text.trim().split(/\s+/).filter(Boolean).length
 }
 
-function toArticleDto(a: typeof schema.articles.$inferSelect, author: typeof schema.users.$inferSelect) {
+function toArticleDto(
+  a: typeof schema.articles.$inferSelect,
+  author: typeof schema.users.$inferSelect,
+  env: MediaEnv,
+) {
   return {
     id: a.id,
     slug: a.slug,
@@ -41,7 +47,7 @@ function toArticleDto(a: typeof schema.articles.$inferSelect, author: typeof sch
       id: author.id,
       handle: author.handle,
       displayName: author.displayName,
-      avatarUrl: author.avatarUrl,
+      avatarUrl: assetUrl(env, author.avatarUrl),
       isVerified: author.isVerified,
     },
   }
@@ -103,7 +109,7 @@ articlesRoute.post('/', requireAuth(), async (c) => {
     return { article: { ...article, crosspostPostId }, author: author! }
   })
 
-  return c.json({ article: toArticleDto(result.article, result.author) }, 201)
+  return c.json({ article: toArticleDto(result.article, result.author, c.get('ctx').mediaEnv) }, 201)
 })
 
 articlesRoute.patch('/:id', requireAuth(), async (c) => {
@@ -173,7 +179,7 @@ articlesRoute.patch('/:id', requireAuth(), async (c) => {
     return { article, author: author! }
   })
 
-  return c.json({ article: toArticleDto(result.article, result.author) })
+  return c.json({ article: toArticleDto(result.article, result.author, c.get('ctx').mediaEnv) })
 })
 
 articlesRoute.delete('/:id', requireAuth(), async (c) => {
@@ -211,7 +217,7 @@ articlesRoute.get('/:id', requireAuth(), async (c) => {
   if (row.article.status === 'draft' && row.article.authorId !== session.user.id) {
     return c.json({ error: 'not_found' }, 404)
   }
-  return c.json({ article: toArticleDto(row.article, row.author) })
+  return c.json({ article: toArticleDto(row.article, row.author, c.get('ctx').mediaEnv) })
 })
 
 class HttpError extends Error {

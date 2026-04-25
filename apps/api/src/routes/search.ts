@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { and, desc, eq, ilike, isNull, or, sql } from '@workspace/db'
 import { schema } from '@workspace/db'
+import { assetUrl } from '@workspace/media/s3'
 import type { HonoEnv } from '../middleware/session.ts'
 import { toPostDto } from '../lib/post-dto.ts'
 import { loadViewerFlags } from '../lib/viewer-flags.ts'
@@ -40,6 +41,12 @@ searchRoute.get('/', async (c) => {
       ),
     )
     .limit(20)
+
+  const usersDto = users.map((u) => ({
+    ...u,
+    avatarUrl: assetUrl(mediaEnv, u.avatarUrl),
+    bannerUrl: assetUrl(mediaEnv, u.bannerUrl),
+  }))
 
   // Posts: Postgres FTS over text column (no GIN index for v1; acceptable until post count grows).
   const postRows = await db
@@ -86,5 +93,5 @@ searchRoute.get('/', async (c) => {
       quoteMap.get(r.post.id),
     ),
   )
-  return c.json({ users, posts })
+  return c.json({ users: usersDto, posts })
 })

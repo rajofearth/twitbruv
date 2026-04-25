@@ -167,7 +167,57 @@ export async function ensureBucket(args: {
   }
 }
 
-/** Public (CDN-ish) URL for a stored object. In MinIO we hit the same S3 endpoint. */
+/**
+ * Public URL for a stored object. When `MEDIA_PROXY_BASE` is set the URL routes through the
+ * API's signing proxy (private buckets); otherwise it points directly at the public bucket.
+ */
 export function publicUrl(env: MediaEnv, key: string) {
+  if (env.MEDIA_PROXY_BASE) {
+    return `${env.MEDIA_PROXY_BASE.replace(/\/$/, '')}/${key.replace(/^\/+/, '')}`
+  }
   return `${env.S3_PUBLIC_URL.replace(/\/$/, '')}/${key}`
+}
+
+/**
+ * Best-effort key extraction for legacy DB rows that stored a full S3 URL (e.g. before we
+ * switched to the proxy). Strips the host and an optional bucket prefix.
+ */
+export function extractKey(env: MediaEnv, urlOrKey: string): string {
+  if (!urlOrKey.includes('://')) return urlOrKey.replace(/^\/+/, '')
+  try {
+    const u = new URL(urlOrKey)
+    const parts = u.pathname.replace(/^\/+/, '').split('/')
+    if (parts[0] === env.S3_BUCKET) return parts.slice(1).join('/')
+    if (parts[0]?.startsWith('bucket-')) return parts.slice(1).join('/')
+    return parts.join('/')
+  } catch {
+    return urlOrKey
+  }
+}
+
+/**
+ * Normalize any stored asset reference (legacy public URL, bare key, or already-proxy URL)
+ * into the canonical URL the browser should hit. Use this in every DTO that exposes a stored
+ * `avatarUrl` / `bannerUrl` so legacy DB rows keep working without a migration.
+ */
+export function assetUrl(env: MediaEnv, stored: string | null | undefined): string | null {
+  if (!stored) return null
+  if (env.MEDIA_PROXY_BASE && stored.startsWith(env.MEDIA_PROXY_BASE)) return stored
+  if (!stored.includes('://')) return publicUrl(env, stored)
+  return publicUrl(env, extractKey(env, stored))
+}
+
+/**
+ * Short-lived signed GET URL. We use this for providers that don't support public buckets
+ * (e.g. Tigris). The /api/m/* endpoint mints these and 302-redirects so callers can use a
+ * stable proxy URL instead of dealing with expiry on the client.
+ */
+export async function signedGetUrl(args: {
+  s3: S3
+  bucket: string
+  key: string
+  expiresInSeconds?: number
+}): Promise<string> {
+  const command = new GetObjectCommand({ Bucket: args.bucket, Key: args.key })
+  return getSignedUrl(args.s3, command, { expiresIn: args.expiresInSeconds ?? 3600 })
 }

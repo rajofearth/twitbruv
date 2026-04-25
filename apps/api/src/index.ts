@@ -12,6 +12,7 @@ import { feedRoute } from './routes/feed.ts'
 import { hashtagsRoute } from './routes/hashtags.ts'
 import { searchRoute } from './routes/search.ts'
 import { createMediaRoute } from './routes/media.ts'
+import { signedGetUrl } from '@workspace/media/s3'
 import { articlesRoute } from './routes/articles.ts'
 import { notificationsRoute } from './routes/notifications.ts'
 import { analyticsRoute } from './routes/analytics.ts'
@@ -49,6 +50,27 @@ app.route('/api/feed', feedRoute)
 app.route('/api/hashtags', hashtagsRoute)
 app.route('/api/search', searchRoute)
 app.route('/api/media', createMediaRoute({ s3: ctx.s3, mediaEnv: ctx.mediaEnv, boss: ctx.boss }))
+
+// Signing proxy: takes a stored object key on the path, mints a 1h signed URL, and 302s the
+// browser to it. We cache the redirect for a few minutes so repeated `<img>` paints don't
+// thrash signing. The signed URL itself stays valid past the cache so refreshes hit the same
+// underlying object cheaply.
+app.get('/api/m/*', async (c) => {
+  const url = new URL(c.req.url)
+  const key = decodeURIComponent(url.pathname.replace(/^\/api\/m\/?/, ''))
+  if (!key) return c.json({ error: 'missing_key' }, 400)
+  // Mild path traversal guard: keys are always forward paths under our control.
+  if (key.includes('..')) return c.json({ error: 'bad_key' }, 400)
+
+  const signed = await signedGetUrl({
+    s3: ctx.s3,
+    bucket: ctx.mediaEnv.S3_BUCKET,
+    key,
+    expiresInSeconds: 60 * 60,
+  })
+  c.header('Cache-Control', 'public, max-age=300')
+  return c.redirect(signed, 302)
+})
 app.route('/api/articles', articlesRoute)
 app.route('/api/notifications', notificationsRoute)
 app.route('/api/analytics', analyticsRoute)
