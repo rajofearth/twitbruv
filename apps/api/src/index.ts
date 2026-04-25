@@ -56,10 +56,11 @@ app.route('/api/media', createMediaRoute({ s3: ctx.s3, mediaEnv: ctx.mediaEnv, b
 // thrash signing. The signed URL itself stays valid past the cache so refreshes hit the same
 // underlying object cheaply.
 app.get('/api/m/*', async (c) => {
-  const url = new URL(c.req.url)
-  const key = decodeURIComponent(url.pathname.replace(/^\/api\/m\/?/, ''))
+  // c.req.path is the normalized request path; split-after the route prefix to recover the key
+  // robustly across runtimes (some Bun/Hono versions hand back unexpected `c.req.url` shapes).
+  const after = c.req.path.split('/api/m/')[1] ?? ''
+  const key = decodeURIComponent(after)
   if (!key) return c.json({ error: 'missing_key' }, 400)
-  // Mild path traversal guard: keys are always forward paths under our control.
   if (key.includes('..')) return c.json({ error: 'bad_key' }, 400)
 
   const signed = await signedGetUrl({
