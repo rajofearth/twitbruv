@@ -22,7 +22,16 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { name: "theme-color", content: "#1d4ed8" },
+      {
+        name: "theme-color",
+        content: "#faf9f5",
+        media: "(prefers-color-scheme: light)",
+      },
+      {
+        name: "theme-color",
+        content: "#3a3a3a",
+        media: "(prefers-color-scheme: dark)",
+      },
       ...buildSeoMeta({
         title: APP_NAME,
         rawTitle: true,
