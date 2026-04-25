@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from 'hono'
+import { eq, schema } from '@workspace/db'
 import type { AppContext } from '../lib/context.ts'
 
 export type Role = 'user' | 'admin' | 'owner'
@@ -40,13 +41,23 @@ export function requireAuth(): MiddlewareHandler<HonoEnv> {
   }
 }
 
+// Role check goes back to the DB because better-auth's session.user surface doesn't include
+// custom fields like `role` by default. Per-request DB hit is fine — admin endpoints are low
+// volume — and it means a role change takes effect on the very next request.
 export function requireRole(...roles: Array<Role>): MiddlewareHandler<HonoEnv> {
   return async (c, next) => {
     const session = c.get('session')
     if (!session) return c.json({ error: 'unauthorized' }, 401)
-    if (!roles.includes(session.user.role)) {
-      return c.json({ error: 'forbidden' }, 403)
-    }
+    const { db } = c.get('ctx')
+    const [row] = await db
+      .select({ role: schema.users.role })
+      .from(schema.users)
+      .where(eq(schema.users.id, session.user.id))
+      .limit(1)
+    const role = (row?.role ?? 'user') as Role
+    if (!roles.includes(role)) return c.json({ error: 'forbidden' }, 403)
+    // Make the looked-up role visible to handlers (e.g. admin route checks owner-only logic).
+    session.user.role = role
     await next()
   }
 }
