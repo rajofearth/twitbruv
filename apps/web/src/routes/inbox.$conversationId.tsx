@@ -16,7 +16,9 @@ import {
 import type { ChangeEvent, FormEvent, KeyboardEvent } from "react"
 import type { DmMessage, PostMedia } from "../lib/api"
 
-export const Route = createFileRoute("/inbox/$conversationId")({ component: Thread })
+export const Route = createFileRoute("/inbox/$conversationId")({
+  component: Thread,
+})
 
 const MAX_INPUT_BYTES = 15 * 1024 * 1024 // mirrors API/api/media intent ceiling pre-compress
 
@@ -55,10 +57,11 @@ function Thread() {
           return [...prev, ...additions]
         })
       } catch (e) {
-        if (!opts.silent) setError(e instanceof Error ? e.message : "failed to load")
+        if (!opts.silent)
+          setError(e instanceof Error ? e.message : "failed to load")
       }
     },
-    [conversationId],
+    [conversationId]
   )
 
   useEffect(() => {
@@ -106,13 +109,18 @@ function Thread() {
   }, [draft])
 
   // Revoke any object URL we created when its preview goes away.
-  useEffect(() => () => {
-    if (pending) URL.revokeObjectURL(pending.previewUrl)
-  }, [pending])
+  useEffect(
+    () => () => {
+      if (pending) URL.revokeObjectURL(pending.previewUrl)
+    },
+    [pending]
+  )
 
   const peer = useMemo(() => {
     if (!me) return null
-    const fromOther = messages.find((m) => m.sender && m.senderId !== me)?.sender
+    const fromOther = messages.find(
+      (m) => m.sender && m.senderId !== me
+    )?.sender
     return fromOther ?? null
   }, [messages, me])
 
@@ -126,7 +134,9 @@ function Thread() {
       return
     }
     if (file.size > MAX_INPUT_BYTES) {
-      setError(`image too large (max ${(MAX_INPUT_BYTES / 1024 / 1024).toFixed(0)}MB)`)
+      setError(
+        `image too large (max ${(MAX_INPUT_BYTES / 1024 / 1024).toFixed(0)}MB)`
+      )
       return
     }
     if (pending) URL.revokeObjectURL(pending.previewUrl)
@@ -162,7 +172,7 @@ function Thread() {
         const compressed = await compressImage(pending.file)
         if (compressed.size > MAX_UPLOAD_BYTES) {
           throw new Error(
-            `image too large after compression (${(compressed.size / 1024 / 1024).toFixed(1)}MB > ${MAX_UPLOAD_BYTES / 1024 / 1024}MB)`,
+            `image too large after compression (${(compressed.size / 1024 / 1024).toFixed(1)}MB > ${MAX_UPLOAD_BYTES / 1024 / 1024}MB)`
           )
         }
         const uploaded = await uploadImage(compressed)
@@ -175,7 +185,7 @@ function Thread() {
       setDraft("")
       clearPending()
       setMessages((prev) =>
-        prev.some((m) => m.id === message.id) ? prev : [...prev, message],
+        prev.some((m) => m.id === message.id) ? prev : [...prev, message]
       )
     } catch (err) {
       setError(err instanceof Error ? err.message : "failed to send")
@@ -194,19 +204,25 @@ function Thread() {
   return (
     <main className="flex h-[calc(100vh-3.5rem)] flex-col">
       <header className="flex items-center gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm">
-        <Link to="/inbox" className="text-xs text-muted-foreground hover:underline">
+        <Link
+          to="/inbox"
+          className="text-xs text-muted-foreground hover:underline"
+        >
           ← Inbox
         </Link>
         <div className="ml-2 flex min-w-0 items-center gap-2">
           {peer && (
             <Avatar
-              initial={(peer.displayName || peer.handle || "?").slice(0, 1).toUpperCase()}
+              initial={(peer.displayName || peer.handle || "?")
+                .slice(0, 1)
+                .toUpperCase()}
               src={peer.avatarUrl}
             />
           )}
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold">
-              {peer?.displayName || (peer?.handle ? `@${peer.handle}` : "Conversation")}
+              {peer?.displayName ||
+                (peer?.handle ? `@${peer.handle}` : "Conversation")}
             </div>
             {peer?.handle && (
               <Link
@@ -252,7 +268,7 @@ function Thread() {
               type="button"
               onClick={clearPending}
               aria-label="remove attachment"
-              className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-background text-foreground shadow-sm ring-1 ring-border hover:bg-muted"
+              className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-background text-foreground shadow-sm ring-1 ring-border hover:bg-muted"
             >
               <IconX size={12} stroke={2} />
             </button>
@@ -273,7 +289,6 @@ function Thread() {
         />
         <Button
           type="button"
-          size="sm"
           variant="ghost"
           aria-label="attach image"
           disabled={sending}
@@ -289,11 +304,10 @@ function Thread() {
           rows={1}
           disabled={sending}
           onKeyDown={onKeyDown}
-          className="flex-1 resize-none rounded-md border border-border bg-transparent px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-60"
+          className="flex-1 resize-none rounded-md border border-border bg-transparent px-3 py-2 text-sm leading-relaxed focus:ring-1 focus:ring-ring focus:outline-none disabled:opacity-60"
         />
         <Button
           type="submit"
-          size="sm"
           disabled={sending || (draft.trim().length === 0 && !pending)}
         >
           {sending ? "…" : "Send"}
@@ -338,16 +352,22 @@ function GroupBlock({ group, me }: { group: MessageGroup; me: string | null }) {
   return (
     <>
       {group.daySeparator && (
-        <li className="my-3 text-center text-[11px] uppercase tracking-wider text-muted-foreground">
+        <li className="my-3 text-center text-[11px] tracking-wider text-muted-foreground uppercase">
           {group.daySeparator}
         </li>
       )}
-      <li className={`flex items-end gap-2 ${isMine ? "justify-end" : "justify-start"}`}>
+      <li
+        className={`flex items-end gap-2 ${isMine ? "justify-end" : "justify-start"}`}
+      >
         {!isMine && (
           <div className="w-8 shrink-0">
             {group.sender && (
               <Avatar
-                initial={(group.sender.displayName || group.sender.handle || "?")
+                initial={(
+                  group.sender.displayName ||
+                  group.sender.handle ||
+                  "?"
+                )
                   .slice(0, 1)
                   .toUpperCase()}
                 src={group.sender.avatarUrl}
@@ -355,7 +375,9 @@ function GroupBlock({ group, me }: { group: MessageGroup; me: string | null }) {
             )}
           </div>
         )}
-        <div className={`flex max-w-[75%] flex-col gap-0.5 ${isMine ? "items-end" : "items-start"}`}>
+        <div
+          className={`flex max-w-[75%] flex-col gap-0.5 ${isMine ? "items-end" : "items-start"}`}
+        >
           {group.messages.map((m, i) => {
             const isFirst = i === 0
             const isLast = i === group.messages.length - 1
@@ -404,7 +426,7 @@ function Bubble({
     >
       {message.media && <MessageImage media={message.media} />}
       {message.text && (
-        <p className="whitespace-pre-wrap break-words">{message.text}</p>
+        <p className="break-words whitespace-pre-wrap">{message.text}</p>
       )}
       {!message.media && !message.text && (
         <em className="opacity-70">[unsupported]</em>
@@ -459,5 +481,9 @@ function formatDay(d: Date): string {
   yesterday.setDate(yesterday.getDate() - 1)
   if (d.toDateString() === today.toDateString()) return "Today"
   if (d.toDateString() === yesterday.toDateString()) return "Yesterday"
-  return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })
+  return d.toLocaleDateString([], {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  })
 }
