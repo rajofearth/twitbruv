@@ -99,7 +99,7 @@ function Landing() {
   if (session) {
     const needsHandle = me && !me.handle
     return (
-      <main className="@min-[1120px]/inset:flex @min-[1120px]/inset:h-full @min-[1120px]/inset:min-h-0 @min-[1120px]/inset:justify-center @min-[1120px]/inset:overflow-hidden">
+      <main className="@min-[1120px]/inset:flex @min-[1120px]/inset:h-[calc(100svh-3rem)] @min-[1120px]/inset:min-h-0 @min-[1120px]/inset:justify-center @min-[1120px]/inset:overflow-hidden">
         <div className="@min-[1120px]/inset:flex @min-[1120px]/inset:h-full @min-[1120px]/inset:min-h-0 @min-[1120px]/inset:w-[1120px] @min-[1120px]/inset:items-stretch">
           <div
             className={`mx-auto w-full min-w-0 border-border md:max-w-[640px] md:border-x @min-[1120px]/inset:mx-0 @min-[1120px]/inset:flex @min-[1120px]/inset:h-full @min-[1120px]/inset:min-h-0 @min-[1120px]/inset:w-[640px] @min-[1120px]/inset:max-w-none @min-[1120px]/inset:shrink-0 @min-[1120px]/inset:flex-col @min-[1120px]/inset:overflow-y-auto @min-[1120px]/inset:border-x @min-[1120px]/inset:border-border @min-[1120px]/inset:transition-transform @min-[1120px]/inset:duration-300 @min-[1120px]/inset:ease-out @min-[1120px]/inset:[will-change:transform] @min-[1120px]/inset:[contain:layout] ${

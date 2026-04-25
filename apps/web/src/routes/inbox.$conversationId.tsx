@@ -1121,9 +1121,7 @@ function ThreadHeader({
             {peer?.displayName ||
               (peer?.handle ? `@${peer.handle}` : "Conversation")}
           </span>
-          {peer?.isVerified && (
-            <VerifiedBadge size={14} role={peer.role} />
-          )}
+          {peer?.isVerified && <VerifiedBadge size={14} role={peer.role} />}
         </div>
         {peer?.handle && (
           <Link

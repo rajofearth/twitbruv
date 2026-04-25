@@ -80,9 +80,7 @@ export function UserNav({ user }: { user: SelfUser }) {
           <div className="flex min-w-0 flex-col leading-tight">
             <span className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">
               <span className="truncate">{displayName}</span>
-              {user.isVerified && (
-                <VerifiedBadge size={14} role={user.role} />
-              )}
+              {user.isVerified && <VerifiedBadge size={14} role={user.role} />}
             </span>
             <span className="truncate text-xs text-muted-foreground">
               {subtitle}

@@ -844,7 +844,10 @@ export interface DmConversationDetail {
   myRole: "member" | "admin"
   myRequestState: DmRequestState
   members: Array<
-    DmMember & { chatRole: "member" | "admin"; lastReadMessageId: string | null }
+    DmMember & {
+      chatRole: "member" | "admin"
+      lastReadMessageId: string | null
+    }
   >
 }
 

@@ -886,7 +886,7 @@ function EditHistoryDialog({
       .postEdits(post.id)
       .then(({ edits: rows }) => setEdits(rows))
       .catch((e) =>
-        setError(e instanceof ApiError ? e.message : "couldn't load history"),
+        setError(e instanceof ApiError ? e.message : "couldn't load history")
       )
   }, [open, post.id])
 
@@ -894,7 +894,9 @@ function EditHistoryDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-sm font-semibold">Edit history</DialogTitle>
+          <DialogTitle className="text-sm font-semibold">
+            Edit history
+          </DialogTitle>
           <DialogDescription className="sr-only">
             Previous versions of this post, newest first.
           </DialogDescription>

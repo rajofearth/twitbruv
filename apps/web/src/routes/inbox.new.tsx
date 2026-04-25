@@ -110,9 +110,7 @@ function NewConversation() {
                   <span className="flex items-center gap-1 font-medium">
                     {u.displayName ||
                       (u.handle ? `@${u.handle}` : u.id.slice(0, 8))}
-                    {u.isVerified && (
-                      <VerifiedBadge size={12} role={u.role} />
-                    )}
+                    {u.isVerified && <VerifiedBadge size={12} role={u.role} />}
                   </span>
                   <button
                     type="button"

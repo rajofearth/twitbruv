@@ -32,7 +32,7 @@ export function VerifiedBadge({
       className={cn(
         "inline-block shrink-0",
         roleColorClass[resolvedRole],
-        className,
+        className
       )}
     />
   )

@@ -455,7 +455,7 @@ export function Compose({
                     value={replyRestriction}
                     onChange={(e) =>
                       setReplyRestriction(
-                        e.target.value as "anyone" | "following" | "mentioned",
+                        e.target.value as "anyone" | "following" | "mentioned"
                       )
                     }
                     className="bg-transparent text-xs focus:outline-none"

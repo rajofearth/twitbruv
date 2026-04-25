@@ -44,10 +44,10 @@ export function ThreadViewContent({
             ancestors: t.ancestors.map((p) => (p.id === next.id ? next : p)),
             post: t.post && t.post.id === next.id ? next : t.post,
             replies: t.replies.map((p) =>
-              p.id === next.id ? { ...p, ...next } : p,
+              p.id === next.id ? { ...p, ...next } : p
             ),
           }
-        : t,
+        : t
     )
   }
 
