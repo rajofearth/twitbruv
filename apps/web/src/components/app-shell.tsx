@@ -32,6 +32,7 @@ import { api } from "../lib/api"
 import { APP_NAME } from "../lib/env"
 import { subscribeToDmStream } from "../lib/dm-stream"
 import { useMe } from "../lib/me"
+import { AppPageHeaderProvider } from "./app-page-header"
 import { AppHeader } from "./app-header"
 import { PublicShell } from "./public-shell"
 import { UserNav } from "./user-nav"
@@ -50,7 +51,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <TooltipProvider>
-      <SidebarProvider>
+      <AppPageHeaderProvider>
+        <SidebarProvider>
         <Sidebar collapsible="icon">
           <SidebarHeader className="p-2">
             <Link to="/" className="flex items-center gap-2">
@@ -217,7 +219,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           {!isInbox && <ComposeFab />}
         </SidebarInset>
         <SidebarCloseOnNavigate />
-      </SidebarProvider>
+        </SidebarProvider>
+      </AppPageHeaderProvider>
     </TooltipProvider>
   )
 }

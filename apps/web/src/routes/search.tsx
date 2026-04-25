@@ -1,5 +1,5 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   IconBookmark,
   IconBookmarkFilled,
@@ -9,7 +9,8 @@ import {
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
-import { PageEmpty, PageHeader, PageLoading } from "../components/page-surface"
+import { usePageHeader } from "../components/app-page-header"
+import { PageEmpty, PageLoading } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
 import { PostCard } from "../components/post-card"
 import { VerifiedBadge } from "../components/verified-badge"
@@ -97,6 +98,12 @@ function SearchInner({ initialQuery }: { initialQuery: string }) {
     navigate({ to: "/search", search: { q: term } })
   }
 
+  const appHeader = useMemo(
+    () => ({ title: "Search" as const }),
+    []
+  )
+  usePageHeader(appHeader)
+
   async function toggleSaved() {
     if (!me) return
     if (query.length < 2) return
@@ -129,8 +136,7 @@ function SearchInner({ initialQuery }: { initialQuery: string }) {
     <PageFrame>
       <main>
         <div className="border-b border-border">
-          <PageHeader title="Search" className="border-0" />
-          <form onSubmit={onSubmit} className="px-4 pb-3">
+          <form onSubmit={onSubmit} className="px-4 py-3">
             <div className="relative">
               <IconSearch
                 size={14}

@@ -48,7 +48,9 @@ export const Route = createFileRoute("/$handle/p/$id")({
       }
     }
     const author = post.author.displayName || `@${post.author.handle ?? "user"}`
-    const description = clipDescription(post.text || `A post by ${author} on ${APP_NAME}.`)
+    const description = clipDescription(
+      post.text || `A post by ${author} on ${APP_NAME}.`
+    )
     return {
       meta: buildSeoMeta({
         title: `${author}: "${clipDescription(post.text, 60)}"`,
@@ -616,13 +618,13 @@ function ParentPost({
 
       {post.quoteOf && <QuoteEmbed post={post.quoteOf} />}
 
-      <div className="mt-2.5 flex items-center gap-3 text-[11px] tabular-nums text-muted-foreground">
+      {/* <div className="mt-2.5 flex items-center gap-3 text-[11px] tabular-nums text-muted-foreground">
         {post.counts.reposts > 0 && <span>{post.counts.reposts} reposts</span>}
         {post.counts.likes > 0 && <span>{post.counts.likes} likes</span>}
         {post.counts.bookmarks > 0 && (
           <span>{post.counts.bookmarks} bookmarks</span>
         )}
-      </div>
+      </div> */}
 
       <div className="mt-2.5 flex items-center gap-5 text-muted-foreground">
         <button

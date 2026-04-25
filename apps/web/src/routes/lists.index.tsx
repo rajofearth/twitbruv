@@ -1,5 +1,5 @@
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { IconLock, IconPin, IconPinFilled, IconUsers } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
@@ -9,12 +9,8 @@ import { Textarea } from "@workspace/ui/components/textarea"
 import { LIST_SLUG_RE, LIST_TITLE_MAX } from "@workspace/validators"
 import { ApiError, api } from "../lib/api"
 import { authClient } from "../lib/auth"
-import {
-  PageEmpty,
-  PageError,
-  PageHeader,
-  PageLoading,
-} from "../components/page-surface"
+import { usePageHeader } from "../components/app-page-header"
+import { PageEmpty, PageError, PageLoading } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
 import type { UserList } from "../lib/api"
 
@@ -44,19 +40,26 @@ function ListsIndex() {
     if (session) void refresh()
   }, [session])
 
+  const toggleCreating = useCallback(() => {
+    setCreating((v) => !v)
+  }, [])
+
+  const appHeader = useMemo(
+    () => ({
+      title: "Lists" as const,
+      action: (
+        <Button size="sm" onClick={toggleCreating}>
+          {creating ? "Cancel" : "New list"}
+        </Button>
+      ),
+    }),
+    [creating, toggleCreating]
+  )
+  usePageHeader(appHeader)
+
   return (
     <PageFrame>
       <main>
-        <PageHeader
-          title="Lists"
-          description="Curate people into private or public timelines."
-          action={
-            <Button size="sm" onClick={() => setCreating((v) => !v)}>
-              {creating ? "Cancel" : "New list"}
-            </Button>
-          }
-        />
-
         {creating && (
           <CreateListForm
             onCancel={() => setCreating(false)}

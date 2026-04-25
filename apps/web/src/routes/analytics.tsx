@@ -13,7 +13,7 @@ import {
   IconUserSearch,
   IconUsers,
 } from "@tabler/icons-react"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Select,
   SelectContent,
@@ -23,24 +23,13 @@ import {
 } from "@workspace/ui/components/select"
 import { api } from "../lib/api"
 import { authClient } from "../lib/auth"
+import { usePageHeader } from "../components/app-page-header"
 import { PageFrame } from "../components/page-frame"
-import { PageError, PageHeader, PageLoading } from "../components/page-surface"
+import { PageError, PageLoading } from "../components/page-surface"
 import type { ReactNode } from "react"
 import type { AnalyticsOverview, Post } from "../lib/api"
 
 export const Route = createFileRoute("/analytics")({ component: Analytics })
-
-function formatPeriodStart(iso: string) {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    })
-  } catch {
-    return iso
-  }
-}
 
 function formatPostAge(iso: string): string {
   const d = new Date(iso).getTime()
@@ -130,33 +119,34 @@ function Analytics() {
       .catch((e) => setError(e instanceof Error ? e.message : "failed to load"))
   }, [session, days])
 
+  const onDays = useCallback((v: string | null) => {
+    if (v == null) return
+    setDays(Number(v))
+  }, [])
+
+  const appHeader = useMemo(
+    () => ({
+      title: "Analytics" as const,
+      action: (
+        <Select value={String(days)} onValueChange={onDays}>
+          <SelectTrigger size="sm" className="h-8 w-full min-w-[8rem] sm:w-auto">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7">Last 7 days</SelectItem>
+            <SelectItem value="28">Last 28 days</SelectItem>
+            <SelectItem value="90">Last 90 days</SelectItem>
+          </SelectContent>
+        </Select>
+      ),
+    }),
+    [days, onDays]
+  )
+  usePageHeader(appHeader)
+
   return (
     <PageFrame>
       <main>
-        <PageHeader
-          title="Analytics"
-          description={
-            data
-              ? `Window from ${formatPeriodStart(data.period.since)} · ${data.period.days} days · Free, self-reported only`
-              : "Free, self-reported only"
-          }
-          action={
-            <Select
-              value={String(days)}
-              onValueChange={(v) => setDays(Number(v))}
-            >
-              <SelectTrigger size="sm" className="h-8 w-full min-w-[8rem] sm:w-auto">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7">Last 7 days</SelectItem>
-                <SelectItem value="28">Last 28 days</SelectItem>
-                <SelectItem value="90">Last 90 days</SelectItem>
-              </SelectContent>
-            </Select>
-          }
-        />
-
         {error && <PageError message={error} />}
         {!data && !error && <PageLoading label="Loading…" />}
 

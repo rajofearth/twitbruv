@@ -1,5 +1,6 @@
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router"
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -24,6 +25,7 @@ import { Skeleton, SkeletonAvatar } from "@workspace/ui/components/skeleton"
 import { api } from "../lib/api"
 import { authClient } from "../lib/auth"
 import { Avatar } from "../components/avatar"
+import { usePageHeader } from "../components/app-page-header"
 import { PageFrame } from "../components/page-frame"
 import { VerifiedBadge } from "../components/verified-badge"
 import { useInfiniteScrollSentinel } from "../lib/use-infinite-scroll-sentinel"
@@ -107,7 +109,7 @@ function Notifications() {
     [data]
   )
 
-  async function markAllRead() {
+  const markAllRead = useCallback(async () => {
     await api.notificationsMarkRead({ all: true })
     const now = new Date().toISOString()
     queryClient.setQueryData<
@@ -124,24 +126,31 @@ function Notifications() {
         })),
       }
     })
-  }
+  }, [queryClient])
 
   const hasUnread = items.some((n) => !n.readAt)
+
+  const appHeader = useMemo(
+    () => ({
+      title: "Notifications" as const,
+      action: (
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={!hasUnread}
+          onClick={markAllRead}
+        >
+          Mark all read
+        </Button>
+      ),
+    }),
+    [hasUnread, markAllRead]
+  )
+  usePageHeader(appHeader)
 
   return (
     <PageFrame>
       <main>
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm">
-          <h1 className="text-base font-semibold">Notifications</h1>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={!hasUnread}
-            onClick={markAllRead}
-          >
-            Mark all read
-          </Button>
-        </header>
         {isPending ? (
           <div>
             {Array.from({ length: 5 }).map((_, i) => (
