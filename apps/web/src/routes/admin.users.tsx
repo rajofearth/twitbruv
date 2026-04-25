@@ -49,6 +49,8 @@ type ActionDialogState =
   | { kind: "ban"; user: AdminUser }
   | { kind: "shadow"; user: AdminUser }
   | { kind: "verify"; user: AdminUser }
+  | { kind: "handle"; user: AdminUser }
+  | { kind: "delete"; user: AdminUser }
   | null
 
 function AdminUsers() {
@@ -291,6 +293,26 @@ function AdminUsers() {
               >
                 {u.isVerified ? "Unverify" : "Verify"}
               </Button>
+              {me?.role === "owner" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busyId === u.id}
+                  onClick={() => setDialog({ kind: "handle", user: u })}
+                >
+                  Handle
+                </Button>
+              )}
+              {me?.role === "owner" && !u.deletedAt && (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={busyId === u.id || u.id === me.id}
+                  onClick={() => setDialog({ kind: "delete", user: u })}
+                >
+                  Delete
+                </Button>
+              )}
             </div>
           )
         },
@@ -362,8 +384,14 @@ function AdminUsers() {
         onSubmit={async (run) => {
           if (!dialog) return
           const id = dialog.user.id
-          setDialog(null)
-          await act(id, run)
+          setBusyId(id)
+          try {
+            await run()
+            setDialog(null)
+            await load(q)
+          } finally {
+            setBusyId(null)
+          }
         }}
       />
     </main>
@@ -381,12 +409,18 @@ function ActionDialog({
 }) {
   const [reason, setReason] = useState("")
   const [hours, setHours] = useState("")
+  const [handle, setHandle] = useState("")
+  const [confirm, setConfirm] = useState("")
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     if (state) {
       setReason("")
       setHours("")
+      setHandle(state.kind === "handle" ? (state.user.handle ?? "") : "")
+      setConfirm("")
+      setSubmitError(null)
       setBusy(false)
     }
   }, [state])
@@ -401,6 +435,7 @@ function ActionDialog({
 
   const u = state.user
   const subject = `@${u.handle ?? u.email}`
+  const deleteConfirmText = u.handle ?? u.email
 
   const config = {
     ban: {
@@ -446,12 +481,38 @@ function ActionDialog({
           ? api.adminUnverify(u.id, reason.trim() || undefined)
           : api.adminVerify(u.id, reason.trim() || undefined),
     },
+    handle: {
+      title: `Change handle for ${subject}`,
+      description:
+        "3–20 chars, letters/numbers/underscore. The previous handle is freed for reuse.",
+      submitLabel: "Save handle",
+      submitVariant: "default" as const,
+      showDuration: false,
+      run: () =>
+        api.adminSetHandle(u.id, {
+          handle: handle.trim(),
+          reason: reason.trim() || undefined,
+        }),
+    },
+    delete: {
+      title: `Delete account ${subject}`,
+      description:
+        "Soft-deletes the account: removes them from feeds, profiles, and search, and signs them out everywhere. Reversible from the database.",
+      submitLabel: "Delete account",
+      submitVariant: "destructive" as const,
+      showDuration: false,
+      run: () =>
+        api.adminDeleteUser(u.id, { reason: reason.trim() || undefined }),
+    },
   }[state.kind]
 
   async function submit() {
     setBusy(true)
+    setSubmitError(null)
     try {
       await onSubmit(config.run)
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : "failed")
     } finally {
       setBusy(false)
     }
@@ -465,13 +526,27 @@ function ActionDialog({
           <DialogDescription>{config.description}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
+          {state.kind === "handle" && (
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">New handle</span>
+              <Input
+                value={handle}
+                onChange={(e) => setHandle(e.target.value)}
+                placeholder="newhandle"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                autoFocus
+              />
+            </label>
+          )}
           <label className="flex flex-col gap-1 text-xs">
             <span className="text-muted-foreground">Reason (optional)</span>
             <Input
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Reason"
-              autoFocus
+              autoFocus={state.kind !== "handle"}
             />
           </label>
           {config.showDuration && (
@@ -487,6 +562,24 @@ function ActionDialog({
               />
             </label>
           )}
+          {state.kind === "delete" && (
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-muted-foreground">
+                Type <code className="rounded bg-muted px-1">{deleteConfirmText}</code> to confirm
+              </span>
+              <Input
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder={deleteConfirmText}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            </label>
+          )}
+          {submitError && (
+            <p className="text-xs text-destructive">{submitError}</p>
+          )}
         </div>
         <DialogFooter>
           <Button size="sm" variant="ghost" onClick={onClose} disabled={busy}>
@@ -496,7 +589,7 @@ function ActionDialog({
             size="sm"
             variant={config.submitVariant}
             onClick={submit}
-            disabled={busy}
+            disabled={busy || (state.kind === "delete" && confirm !== deleteConfirmText)}
           >
             {busy ? "Working…" : config.submitLabel}
           </Button>
