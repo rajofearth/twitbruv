@@ -26,6 +26,7 @@ import { adminRoute } from './routes/admin.ts'
 import { pollsRoute } from './routes/polls.ts'
 import { scheduledPostsRoute } from './routes/scheduled-posts.ts'
 import { listsRoute } from './routes/lists.ts'
+import { githubConnectorRoute } from './routes/connectors/github.ts'
 import { chessRoute } from './routes/chess.ts'
 
 const ctx = await buildContext()
@@ -205,6 +206,7 @@ app.route('/api/admin', adminRoute)
 app.route('/api/polls', pollsRoute)
 app.route('/api/scheduled-posts', scheduledPostsRoute)
 app.route('/api/lists', listsRoute)
+app.route('/api/connectors/github', githubConnectorRoute)
 app.route('/api/chess', chessRoute)
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404))
