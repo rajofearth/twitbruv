@@ -3,13 +3,13 @@ import { useEffect, useRef, useState } from "react"
 import {
   BookmarkIcon,
   ChatCircleIcon,
-  HeartIcon,
   PushPinIcon,
   QuotesIcon,
   RepeatIcon,
 } from "@phosphor-icons/react"
 import { Button } from "@workspace/ui/components/button"
 import { Textarea } from "@workspace/ui/components/textarea"
+import { cn } from "@workspace/ui/lib/utils"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +26,7 @@ import {
 import { POST_MAX_LEN } from "@workspace/validators"
 import { recordImpression, trackedAction } from "../lib/analytics"
 import { ApiError, api } from "../lib/api"
+import { LikeIconBurst, useLikeAnimation } from "./like-button-heart"
 import { RichText } from "./rich-text"
 import { MacfolioCardFromText } from "./macfolio-card"
 import { GithubCardBlock } from "./github-card"
@@ -371,7 +372,7 @@ export function PostCard({
       const { post: updated } = await trackedAction(
         "post_edited",
         () => api.editPost(post.id, editText),
-        () => ({ post_id: post.id, char_count: editText.length }),
+        () => ({ post_id: post.id, char_count: editText.length })
       )
       emit(updated)
       setEditing(false)
@@ -401,10 +402,12 @@ export function PostCard({
     }
   }
 
+  const likeAnim = useLikeAnimation()
   function toggleLike() {
     if (busy || !post.viewer) return
     const liked = !post.viewer.liked
     const props = () => ({ post_id: post.id, author_id: post.author.id })
+    likeAnim.trigger()
     optimistic(
       {
         counts: { ...post.counts, likes: post.counts.likes + (liked ? 1 : -1) },
@@ -413,7 +416,7 @@ export function PostCard({
       () =>
         liked
           ? trackedAction("post_liked", () => api.like(post.id), props)
-          : trackedAction("post_unliked", () => api.unlike(post.id), props),
+          : trackedAction("post_unliked", () => api.unlike(post.id), props)
     )
   }
   function toggleBookmark() {
@@ -434,8 +437,8 @@ export function PostCard({
           : trackedAction(
               "post_unbookmarked",
               () => api.unbookmark(post.id),
-              props,
-            ),
+              props
+            )
     )
   }
   function toggleRepost() {
@@ -453,7 +456,7 @@ export function PostCard({
       () =>
         reposted
           ? trackedAction("post_reposted", () => api.repost(post.id), props)
-          : trackedAction("post_unreposted", () => api.unrepost(post.id), props),
+          : trackedAction("post_unreposted", () => api.unrepost(post.id), props)
     )
   }
 
@@ -518,7 +521,7 @@ export function PostCard({
         </div>
 
         <div
-          className={`min-w-0 flex-1${authorHandle ? " cursor-pointer" : ""}`}
+          className={cn("min-w-0 flex-1", authorHandle && "cursor-pointer")}
           onClick={(event) => {
             if (!authorHandle) return
             if (clickedInteractiveElement(event.target)) return
@@ -644,7 +647,10 @@ export function PostCard({
           {!editing && <MacfolioCardFromText text={post.text} />}
           {post.articleCard && <ArticleCardBlock card={post.articleCard} />}
           {post.githubCards?.map((card, i) => (
-            <GithubCardBlock key={`${card.kind}-${card.url}-${i}`} card={card} />
+            <GithubCardBlock
+              key={`${card.kind}-${card.url}-${i}`}
+              card={card}
+            />
           ))}
           {post.media && post.media.length > 0 && (
             <MediaGrid media={post.media} />
@@ -701,11 +707,11 @@ export function PostCard({
               className={`flex cursor-pointer items-center gap-2 transition hover:text-foreground ${post.viewer?.liked ? "text-foreground" : ""}`}
               aria-pressed={post.viewer?.liked}
             >
-              {post.viewer?.liked ? (
-                <HeartIcon className="size-4" weight="fill" />
-              ) : (
-                <HeartIcon className="size-4" />
-              )}
+              <LikeIconBurst
+                liked={!!post.viewer?.liked}
+                animating={likeAnim.animating}
+                iconSize={16}
+              />
               <span className="text-xs">{post.counts.likes}</span>
             </Button>
             <Button

@@ -6,11 +6,15 @@ import {
   ChartBarIcon,
   ChatCircleIcon,
   HashIcon,
-  HeartIcon,
   ImageIcon,
   RepeatIcon,
 } from "@phosphor-icons/react"
 import { Textarea } from "@workspace/ui/components/textarea"
+import { cn } from "@workspace/ui/lib/utils"
+import {
+  LikeIconBurst,
+  useLikeAnimation,
+} from "../components/like-button-heart"
 import { ApiError, api } from "../lib/api"
 import { useSubmitHotkey } from "../lib/hotkeys"
 import { Avatar } from "../components/avatar"
@@ -348,9 +352,11 @@ function AncestorPost({
     }
   }
 
+  const likeAnim = useLikeAnimation()
   function toggleLike() {
     if (busy || !post.viewer) return
     const liked = !post.viewer.liked
+    likeAnim.trigger()
     optimistic(
       {
         counts: { ...post.counts, likes: post.counts.likes + (liked ? 1 : -1) },
@@ -457,7 +463,10 @@ function AncestorPost({
           {post.articleCard && <ArticleCardBlock card={post.articleCard} />}
 
           {post.githubCards?.map((card, i) => (
-            <GithubCardBlock key={`${card.kind}-${card.url}-${i}`} card={card} />
+            <GithubCardBlock
+              key={`${card.kind}-${card.url}-${i}`}
+              card={card}
+            />
           ))}
 
           {post.poll && (
@@ -495,11 +504,11 @@ function AncestorPost({
               disabled={busy || !post.viewer}
               className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-foreground ${post.viewer?.liked ? "text-foreground" : ""}`}
             >
-              {post.viewer?.liked ? (
-                <HeartIcon size={16} weight="fill" />
-              ) : (
-                <HeartIcon size={16} />
-              )}
+              <LikeIconBurst
+                liked={!!post.viewer?.liked}
+                animating={likeAnim.animating}
+                iconSize={16}
+              />
               <span>{post.counts.likes}</span>
             </button>
             <button
@@ -558,9 +567,11 @@ function ParentPost({
     }
   }
 
+  const likeAnim = useLikeAnimation()
   function toggleLike() {
     if (busy || !post.viewer) return
     const liked = !post.viewer.liked
+    likeAnim.trigger()
     optimistic(
       {
         counts: { ...post.counts, likes: post.counts.likes + (liked ? 1 : -1) },
@@ -706,11 +717,11 @@ function ParentPost({
           disabled={busy || !post.viewer}
           className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-foreground ${post.viewer?.liked ? "text-foreground" : ""}`}
         >
-          {post.viewer?.liked ? (
-            <HeartIcon size={16} weight="fill" />
-          ) : (
-            <HeartIcon size={16} />
-          )}
+          <LikeIconBurst
+            liked={!!post.viewer?.liked}
+            animating={likeAnim.animating}
+            iconSize={16}
+          />
           <span>{post.counts.likes}</span>
         </button>
         <button
@@ -891,7 +902,10 @@ function ReplyRow({
     // biome-ignore lint/a11y/useKeyWithClickEvents: row navigates on click; interactive children use clickedInteractiveElement to opt out
     <div
       onClick={openPost}
-      className={`block border-b border-border py-3 pr-4 pl-8 transition-colors${authorHandle ? " cursor-pointer hover:bg-muted/30" : ""}`}
+      className={cn(
+        "block border-b border-border py-3 pr-4 pl-8 transition-colors",
+        authorHandle && "cursor-pointer hover:bg-muted/30"
+      )}
     >
       <ReplyCard post={post} onChange={onChange} onRemove={onRemove} />
     </div>
@@ -927,9 +941,11 @@ function ReplyCard({
     }
   }
 
+  const likeAnim = useLikeAnimation()
   function toggleLike() {
     if (busy || !post.viewer) return
     const liked = !post.viewer.liked
+    likeAnim.trigger()
     optimistic(
       {
         counts: { ...post.counts, likes: post.counts.likes + (liked ? 1 : -1) },
@@ -1070,11 +1086,11 @@ function ReplyCard({
           disabled={busy || !post.viewer}
           className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-foreground ${post.viewer?.liked ? "text-foreground" : ""}`}
         >
-          {post.viewer?.liked ? (
-            <HeartIcon size={16} weight="fill" />
-          ) : (
-            <HeartIcon size={16} />
-          )}
+          <LikeIconBurst
+            liked={!!post.viewer?.liked}
+            animating={likeAnim.animating}
+            iconSize={16}
+          />
           <span>{post.counts.likes}</span>
         </button>
         <button
