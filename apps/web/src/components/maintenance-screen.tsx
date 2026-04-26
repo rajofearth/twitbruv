@@ -11,11 +11,8 @@ export function MaintenanceScreen({ message }: { message?: string | null }) {
       </div>
       <div className="max-w-md space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">
-          Be right back
-        </h1>
-        <p className="text-sm text-muted-foreground">
           {message ?? DEFAULT_MESSAGE}
-        </p>
+        </h1>
       </div>
     </div>
   )

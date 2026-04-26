@@ -8,7 +8,6 @@ import {
 import { IconContext } from "@phosphor-icons/react"
 import { Databuddy } from "@databuddy/sdk/react"
 import { DatabuddyDevtools } from "@databuddy/devtools/react"
-
 import appCss from "@workspace/ui/globals.css?url"
 import { Button } from "@workspace/ui/components/button"
 import { AppShell } from "../components/app-shell"
