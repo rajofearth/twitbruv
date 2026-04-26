@@ -48,6 +48,8 @@ const RESERVED = new Set([
   "ws",
   "bruvimtired",
   "ahmetskilinc",
+  "reaper",
+  "tripwire",
 ])
 
 export function isReservedHandle(handle: string): boolean {
