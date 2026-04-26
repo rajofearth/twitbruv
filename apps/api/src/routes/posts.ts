@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, lt, sql } from '@workspace/db'
 import { schema } from '@workspace/db'
 import { createPostSchema, editPostSchema } from '@workspace/validators'
 import { handleRateLimitError } from '@workspace/rate-limit'
-import { requireAuth, type HonoEnv } from '../middleware/session.ts'
+import { requireHandle, type HonoEnv } from '../middleware/session.ts'
 import { toPostDto } from '../lib/post-dto.ts'
 import { loadViewerFlags } from '../lib/viewer-flags.ts'
 import { loadPostMedia } from '../lib/post-media.ts'
@@ -25,7 +25,7 @@ export const postsRoute = new Hono<HonoEnv>()
 const EDIT_WINDOW_MS = 5 * 60 * 1000
 
 // Create a post (top-level, reply, or quote).
-postsRoute.post('/', requireAuth(), async (c) => {
+postsRoute.post('/', requireHandle(), async (c) => {
   const session = c.get('session')!
   const { db, cache, rateLimit } = c.get('ctx')
   const body = createPostSchema.parse(await c.req.json())
@@ -282,7 +282,7 @@ postsRoute.post('/', requireAuth(), async (c) => {
 })
 
 // Repost (creates a posts row with repostOfId set, empty text).
-postsRoute.post('/:id/repost', requireAuth(), async (c) => {
+postsRoute.post('/:id/repost', requireHandle(), async (c) => {
   const session = c.get('session')!
   const { db, cache, rateLimit } = c.get('ctx')
   const id = c.req.param('id')
@@ -340,7 +340,7 @@ postsRoute.post('/:id/repost', requireAuth(), async (c) => {
   return c.json({ ok: true })
 })
 
-postsRoute.delete('/:id/repost', requireAuth(), async (c) => {
+postsRoute.delete('/:id/repost', requireHandle(), async (c) => {
   const session = c.get('session')!
   const { db } = c.get('ctx')
   const id = c.req.param('id')
@@ -370,7 +370,7 @@ postsRoute.delete('/:id/repost', requireAuth(), async (c) => {
 })
 
 // Like / unlike.
-postsRoute.post('/:id/like', requireAuth(), async (c) => {
+postsRoute.post('/:id/like', requireHandle(), async (c) => {
   const session = c.get('session')!
   const { db, rateLimit } = c.get('ctx')
   const id = c.req.param('id')
@@ -411,7 +411,7 @@ postsRoute.post('/:id/like', requireAuth(), async (c) => {
   return c.json({ ok: true })
 })
 
-postsRoute.delete('/:id/like', requireAuth(), async (c) => {
+postsRoute.delete('/:id/like', requireHandle(), async (c) => {
   const session = c.get('session')!
   const { db } = c.get('ctx')
   const id = c.req.param('id')
@@ -434,7 +434,7 @@ postsRoute.delete('/:id/like', requireAuth(), async (c) => {
 })
 
 // Bookmark / unbookmark.
-postsRoute.post('/:id/bookmark', requireAuth(), async (c) => {
+postsRoute.post('/:id/bookmark', requireHandle(), async (c) => {
   const session = c.get('session')!
   const { db, rateLimit } = c.get('ctx')
   const id = c.req.param('id')
@@ -458,7 +458,7 @@ postsRoute.post('/:id/bookmark', requireAuth(), async (c) => {
   return c.json({ ok: true })
 })
 
-postsRoute.delete('/:id/bookmark', requireAuth(), async (c) => {
+postsRoute.delete('/:id/bookmark', requireHandle(), async (c) => {
   const session = c.get('session')!
   const { db } = c.get('ctx')
   const id = c.req.param('id')
@@ -686,7 +686,7 @@ postsRoute.get('/:id', async (c) => {
 })
 
 // Edit (within 5 min of creation).
-postsRoute.patch('/:id', requireAuth(), async (c) => {
+postsRoute.patch('/:id', requireHandle(), async (c) => {
   const session = c.get('session')!
   const { db, rateLimit } = c.get('ctx')
   await rateLimit(c, 'posts.edit')
@@ -766,7 +766,7 @@ postsRoute.patch('/:id', requireAuth(), async (c) => {
 // Soft delete (author only). Decrements parent counters.
 // Pin a post to the author's profile. Atomic clear-then-set in a tx so only one pinned post
 // per author exists at a time. Reposts/replies/quotes can't be pinned — only originals.
-postsRoute.post('/:id/pin', requireAuth(), async (c) => {
+postsRoute.post('/:id/pin', requireHandle(), async (c) => {
   const session = c.get('session')!
   const { db, rateLimit } = c.get('ctx')
   await rateLimit(c, 'posts.pin')
@@ -794,7 +794,7 @@ postsRoute.post('/:id/pin', requireAuth(), async (c) => {
   return c.json({ ok: true })
 })
 
-postsRoute.delete('/:id/pin', requireAuth(), async (c) => {
+postsRoute.delete('/:id/pin', requireHandle(), async (c) => {
   const session = c.get('session')!
   const { db, rateLimit } = c.get('ctx')
   await rateLimit(c, 'posts.pin')
@@ -838,7 +838,7 @@ postsRoute.get('/:id/edits', async (c) => {
   })
 })
 
-postsRoute.delete('/:id', requireAuth(), async (c) => {
+postsRoute.delete('/:id', requireHandle(), async (c) => {
   const session = c.get('session')!
   const { db, cache } = c.get('ctx')
   const id = c.req.param('id')
@@ -941,7 +941,7 @@ postsRoute.get('/', async (c) => {
 // reply's author still sees it on their own profile and direct links still
 // resolve, but the thread route collapses it behind a "Show hidden replies"
 // affordance — same UX as X.
-postsRoute.post('/:id/hide', requireAuth(), async (c) => {
+postsRoute.post('/:id/hide', requireHandle(), async (c) => {
   const session = c.get('session')!
   const { db } = c.get('ctx')
   const id = c.req.param('id')
@@ -977,7 +977,7 @@ postsRoute.post('/:id/hide', requireAuth(), async (c) => {
   return c.json({ ok: true })
 })
 
-postsRoute.delete('/:id/hide', requireAuth(), async (c) => {
+postsRoute.delete('/:id/hide', requireHandle(), async (c) => {
   const session = c.get('session')!
   const { db } = c.get('ctx')
   const id = c.req.param('id')
