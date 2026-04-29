@@ -31,6 +31,7 @@ export function createAuth(config: AuthConfig) {
     baseURL: config.baseURL,
     secret: config.secret,
     trustedOrigins: config.trustedOrigins,
+    crossSubDomainCookies: config.cookieDomain ? { enabled: true, domain: config.cookieDomain } : undefined,
     database: drizzleAdapter(config.db, {
       provider: "pg",
       // Our schema uses plural table names (users, sessions, accounts, verifications, …)
