@@ -1,0 +1,40 @@
+---
+title: Hover
+description: Animated hover background layer. Use standalone or grouped for a sliding indicator.
+order: 5
+props:
+  - name: active
+    type: boolean
+    default: "false"
+    description: Force the hover background visible (e.g. selected state).
+  - name: background
+    type: string
+    default: '"bg-subtle"'
+    description: Tailwind background class for the hover layer.
+  - name: borderRadius
+    type: string
+    default: '"rounded"'
+    description: Tailwind border-radius class.
+  - name: interactive
+    type: boolean
+    default: "true"
+    description: Enable press-shrink effect on active.
+  - name: disabled
+    type: boolean
+    default: "false"
+    description: Disable all hover and focus effects.
+  - name: fullWidth
+    type: boolean
+    default: "false"
+    description: Stretch to full width of parent.
+---
+
+<ComponentPreview src="hover/default" />
+
+## Grouped
+
+Wrap items in `Hover.Group` for a sliding indicator that moves between items.
+
+<ComponentPreview src="hover/grouped" />
+
+<PropsTable />

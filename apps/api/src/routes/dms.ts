@@ -5,7 +5,6 @@ import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from '@workspace/db'
 import { schema, type Database } from '@workspace/db'
 import { assetUrl } from '@workspace/media/s3'
 import { requireHandle, type HonoEnv } from '../middleware/session.ts'
-import { invalidateUnreadCounts } from '../lib/notify.ts'
 import { parseCursor } from '../lib/cursor.ts'
 import { dmChannel } from '../lib/pubsub.ts'
 import { toMediaDto, type MediaDto } from '../lib/post-dto.ts'
@@ -184,8 +183,13 @@ dmsRoute.get('/', async (c) => {
         AND m.deleted_at IS NULL
         AND (
           cm.last_read_message_id IS NULL OR
-          m.created_at > (
-            SELECT created_at FROM ${schema.messages} WHERE id = cm.last_read_message_id
+          m.created_at > COALESCE(
+            (
+              SELECT created_at
+              FROM ${schema.messages}
+              WHERE id = cm.last_read_message_id
+            ),
+            '-infinity'::timestamptz
           )
         )
       GROUP BY m.conversation_id
@@ -260,7 +264,14 @@ dmsRoute.get('/unread-count', async (c) => {
       AND cm.request_state IN ('none', 'accepted')
       AND (
         cm.last_read_message_id IS NULL OR
-        m.created_at > (SELECT created_at FROM ${schema.messages} WHERE id = cm.last_read_message_id)
+        m.created_at > COALESCE(
+          (
+            SELECT created_at
+            FROM ${schema.messages}
+            WHERE id = cm.last_read_message_id
+          ),
+          '-infinity'::timestamptz
+        )
       )
   `)
   const [pendingRow] = await db
@@ -375,7 +386,7 @@ dmsRoute.post('/', async (c) => {
 // special; from their side the convo was always accepted.
 dmsRoute.post('/:id/accept', async (c) => {
   const session = c.get('session')!
-  const { db, pubsub, cache, rateLimit } = c.get('ctx')
+  const { db, pubsub, rateLimit } = c.get('ctx')
   await rateLimit(c, 'dms.respond')
   const me = session.user.id
   const conversationId = c.req.param('id')
@@ -393,9 +404,6 @@ dmsRoute.post('/:id/accept', async (c) => {
         eq(schema.conversationMembers.userId, me),
       ),
     )
-  // Accepting moves any messages from the requester out of the 'pending' bucket and into
-  // the unread count, so blow the cached count for this user.
-  await invalidateUnreadCounts(cache, [me])
   await pubsub.publish(dmChannel(me), { type: 'membership', conversationId })
   return c.json({ ok: true })
 })
@@ -406,7 +414,7 @@ dmsRoute.post('/:id/accept', async (c) => {
 // gets a follow-from / accepts) but the receiver won't see further messages.
 dmsRoute.post('/:id/decline', async (c) => {
   const session = c.get('session')!
-  const { db, pubsub, cache, rateLimit } = c.get('ctx')
+  const { db, pubsub, rateLimit } = c.get('ctx')
   await rateLimit(c, 'dms.respond')
   const me = session.user.id
   const conversationId = c.req.param('id')
@@ -423,7 +431,6 @@ dmsRoute.post('/:id/decline', async (c) => {
         eq(schema.conversationMembers.userId, me),
       ),
     )
-  await invalidateUnreadCounts(cache, [me])
   await pubsub.publish(dmChannel(me), { type: 'membership', conversationId })
   return c.json({ ok: true })
 })

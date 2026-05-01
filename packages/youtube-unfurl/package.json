@@ -1,0 +1,23 @@
+{
+  "name": "@workspace/youtube-unfurl",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./card": "./src/card.ts",
+    "./urls": "./src/urls.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@workspace/db": "workspace:*",
+    "@workspace/url-unfurl-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@workspace/config-tsconfig": "workspace:*",
+    "typescript": "^6.0.3"
+  }
+}

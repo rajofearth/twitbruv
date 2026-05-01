@@ -1,13 +1,15 @@
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import {
-  DotsThreeIcon,
-  GearIcon,
-  PaperclipIcon,
+  ChatBubbleLeftEllipsisIcon,
+  Cog6ToothIcon,
+  EllipsisHorizontalIcon,
+  PaperClipIcon,
   PencilIcon,
   TrashIcon,
-  XIcon,
-} from "@phosphor-icons/react"
+  XMarkIcon,
+} from "@heroicons/react/24/solid"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -18,27 +20,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@workspace/ui/components/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu"
+import { DropdownMenu } from "@workspace/ui/components/dropdown-menu"
+import { Avatar } from "@workspace/ui/components/avatar"
 import { api } from "../lib/api"
 import { authClient } from "../lib/auth"
+import { qk } from "../lib/query-keys"
 import { getPastedImageFiles } from "../lib/clipboard-images"
-import { Avatar } from "../components/avatar"
 import { ImageLightbox } from "../components/image-lightbox"
 import { PageEmpty, PageError } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
 import { RichText } from "../components/rich-text"
-import { MacfolioCardFromText } from "../components/macfolio-card"
 import { VerifiedBadge } from "../components/verified-badge"
 import { subscribeToDmStream } from "../lib/dm-stream"
 import {
   MAX_UPLOAD_BYTES,
   compressImage,
-  pickVariantUrl,
+  pickPrimaryMediaUrl,
   setAltText,
   uploadImage,
 } from "../lib/media"
@@ -79,6 +76,7 @@ interface Pending {
 function Thread() {
   const { conversationId } = Route.useParams()
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { data: session } = authClient.useSession()
   const me = session?.user.id ?? null
   const [conversation, setConversation] = useState<DmConversationDetail | null>(
@@ -289,8 +287,11 @@ function Thread() {
     const latestId = messages[messages.length - 1].id
     if (latestId === lastSeenIdRef.current) return
     lastSeenIdRef.current = latestId
-    api.dmMarkRead(conversationId, latestId).catch(() => {})
-  }, [messages, conversationId])
+    api
+      .dmMarkRead(conversationId, latestId)
+      .then(() => queryClient.invalidateQueries({ queryKey: qk.dms.unread() }))
+      .catch(() => {})
+  }, [conversationId, messages, queryClient])
 
   // Auto-grow the composer textarea as the user types — capped so a wall of text doesn't
   // swallow the message list.
@@ -332,11 +333,11 @@ function Thread() {
           <div className="flex w-full min-w-0 items-center gap-2">
             <Link
               to="/inbox"
-              className="shrink-0 text-xs text-muted-foreground hover:underline"
+              className="shrink-0 text-xs text-tertiary hover:underline"
             >
               ← Inbox
             </Link>
-            <span className="text-sm text-muted-foreground">…</span>
+            <span className="text-sm text-tertiary">…</span>
           </div>
         ),
       }
@@ -354,11 +355,11 @@ function Thread() {
         conversation.kind === "group" ? (
           <Button
             size="sm"
-            variant="ghost"
+            variant="transparent"
             aria-label="conversation settings"
             onClick={() => setSettingsOpen(true)}
           >
-            <GearIcon size={16} />
+            <Cog6ToothIcon className="size-4" />
           </Button>
         ) : undefined,
     }
@@ -498,15 +499,15 @@ function Thread() {
 
   return (
     <PageFrame className="flex min-h-0 flex-1 flex-col">
-      <main
+      <div
         className="relative flex h-[calc(100vh-3.5rem)] flex-col"
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
         {dragOver && (
-          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-primary/10 text-sm font-medium text-foreground">
-            <div className="rounded-md border-2 border-dashed border-primary bg-background px-4 py-3 shadow-sm">
+          <div className="bg-primary/10 pointer-events-none absolute inset-0 z-20 flex items-center justify-center text-sm font-medium text-primary">
+            <div className="border-primary bg-base rounded-md border-2 border-dashed px-4 py-3 shadow-sm">
               Drop image to attach
             </div>
           </div>
@@ -539,9 +540,10 @@ function Thread() {
           {error && <PageError className="mb-3 max-w-prose" message={error} />}
           {messages.length === 0 && !error && (
             <PageEmpty
+              icon={<ChatBubbleLeftEllipsisIcon />}
               className="py-8"
               title="No messages yet"
-              description="Send a message to start the thread."
+              description="Say hello below to start the conversation."
             />
           )}
 
@@ -559,7 +561,7 @@ function Thread() {
           </ul>
 
           {typingMembers.length > 0 && (
-            <div className="mt-2 flex items-center gap-2 px-2 text-xs text-muted-foreground">
+            <div className="mt-2 flex items-center gap-2 px-2 text-xs text-tertiary">
               <span className="flex -space-x-1">
                 {typingMembers.slice(0, 3).map((m) => (
                   <Avatar
@@ -568,7 +570,7 @@ function Thread() {
                       .slice(0, 1)
                       .toUpperCase()}
                     src={m.avatarUrl}
-                    className="size-5 ring-2 ring-background"
+                    className="ring-base size-5 ring-2"
                   />
                 ))}
               </span>
@@ -583,20 +585,20 @@ function Thread() {
         </div>
 
         {pending && (
-          <div className="flex items-start gap-3 border-t border-border px-3 pt-2">
+          <div className="flex items-start gap-3 border-t border-neutral px-3 pt-2">
             <div className="relative shrink-0">
               <img
                 src={pending.previewUrl}
                 alt="attachment preview"
-                className="h-20 w-20 rounded-md border border-border object-cover"
+                className="h-20 w-20 rounded-md border border-neutral object-cover"
               />
               <button
                 type="button"
                 onClick={clearPending}
                 aria-label="remove attachment"
-                className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-background text-foreground shadow-sm ring-1 ring-border hover:bg-muted"
+                className="bg-base absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full text-primary shadow-sm ring-1 ring-neutral hover:bg-base-2"
               >
-                <XIcon size={12} />
+                <XMarkIcon className="size-3" />
               </button>
             </div>
             <Input
@@ -617,7 +619,7 @@ function Thread() {
         {conversation?.myRequestState !== "pending" && (
           <form
             onSubmit={send}
-            className="flex items-end gap-2 border-t border-border px-3 py-3"
+            className="flex items-end gap-2 border-t border-neutral px-3 py-3"
           >
             <input
               ref={fileInputRef}
@@ -628,12 +630,12 @@ function Thread() {
             />
             <Button
               type="button"
-              variant="ghost"
+              variant="transparent"
               aria-label="attach image"
               disabled={sending}
               onClick={() => fileInputRef.current?.click()}
             >
-              <PaperclipIcon size={18} />
+              <PaperClipIcon className="size-[18px]" />
             </Button>
             <Textarea
               ref={textareaRef}
@@ -657,7 +659,7 @@ function Thread() {
             </Button>
           </form>
         )}
-      </main>
+      </div>
     </PageFrame>
   )
 }
@@ -707,14 +709,19 @@ function RequestBanner({
   }
 
   return (
-    <div className="flex flex-col gap-2 border-t border-border bg-muted/30 px-4 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
-      <p className="text-muted-foreground">
+    <div className="flex flex-col gap-2 border-t border-neutral bg-base-2/30 px-4 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-tertiary">
         This is a message request. Accept to start the conversation or decline
         to remove it.
       </p>
       <div className="flex items-center gap-2">
         {error && <span className="text-destructive">{error}</span>}
-        <Button size="sm" variant="ghost" disabled={busy} onClick={decline}>
+        <Button
+          size="sm"
+          variant="transparent"
+          disabled={busy}
+          onClick={decline}
+        >
           Decline
         </Button>
         <Button size="sm" disabled={busy} onClick={accept}>
@@ -780,7 +787,7 @@ function GroupBlock({
   return (
     <>
       {group.daySeparator && (
-        <li className="my-3 text-center text-[11px] tracking-wider text-muted-foreground uppercase">
+        <li className="my-3 text-center text-[11px] tracking-wider text-tertiary uppercase">
           {group.daySeparator}
         </li>
       )}
@@ -823,7 +830,7 @@ function GroupBlock({
             )
           })}
           {seenBy.length > 0 && (
-            <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+            <div className="mt-0.5 flex items-center gap-1 text-[10px] text-tertiary">
               <span>Seen</span>
               {seenBy.length > 1 && (
                 <span className="flex -space-x-1">
@@ -834,7 +841,7 @@ function GroupBlock({
                         .slice(0, 1)
                         .toUpperCase()}
                       src={m.avatarUrl}
-                      className="size-3.5 ring-1 ring-background"
+                      className="ring-base size-3.5 ring-1"
                     />
                   ))}
                 </span>
@@ -893,10 +900,10 @@ function Bubble({
     ? `${isFirst ? "rounded-tr-2xl" : "rounded-tr-md"} ${isLast ? "rounded-br-2xl" : "rounded-br-md"} rounded-l-2xl`
     : `${isFirst ? "rounded-tl-2xl" : "rounded-tl-md"} ${isLast ? "rounded-bl-2xl" : "rounded-bl-md"} rounded-r-2xl`
   const bg = isDeleted
-    ? "bg-muted/60 text-muted-foreground italic"
+    ? "bg-base-2/60 text-tertiary italic"
     : isMine
       ? "bg-primary text-primary-foreground"
-      : "bg-muted text-foreground"
+      : "bg-base-2 text-primary"
   const time = new Date(message.createdAt).toLocaleTimeString([], {
     hour: "numeric",
     minute: "2-digit",
@@ -965,46 +972,46 @@ function Bubble({
         type="button"
         onClick={() => setShowPicker((p) => !p)}
         aria-label="add reaction"
-        className="flex size-6 items-center justify-center rounded-full bg-background text-xs ring-1 ring-border hover:bg-muted/40"
+        className="bg-base flex size-6 items-center justify-center rounded-full text-xs ring-1 ring-neutral hover:bg-base-2/40"
       >
         😀
       </button>
       {(canEdit || canDelete) && (
-        <DropdownMenu>
-          <DropdownMenuTrigger
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger
             render={
               <button
                 type="button"
                 aria-label="message options"
-                className="flex size-6 items-center justify-center rounded-full bg-background ring-1 ring-border hover:bg-muted/40"
+                className="bg-base flex size-6 items-center justify-center rounded-full ring-1 ring-neutral hover:bg-base-2/40"
               >
-                <DotsThreeIcon size={12} />
+                <EllipsisHorizontalIcon className="size-3" />
               </button>
             }
           />
-          <DropdownMenuContent align={isMine ? "end" : "start"} sideOffset={4}>
+          <DropdownMenu.Content align={isMine ? "end" : "start"} sideOffset={4}>
             {canEdit && (
-              <DropdownMenuItem onClick={() => setEditing(true)}>
-                <PencilIcon size={14} />
+              <DropdownMenu.Item onClick={() => setEditing(true)}>
+                <PencilIcon className="size-3.5" />
                 <span>Edit</span>
-              </DropdownMenuItem>
+              </DropdownMenu.Item>
             )}
             {canDelete && (
-              <DropdownMenuItem
-                variant="destructive"
+              <DropdownMenu.Item
+                variant="danger"
                 onClick={doDelete}
                 disabled={busy}
               >
-                <TrashIcon size={14} />
+                <TrashIcon className="size-3.5" />
                 <span>Delete</span>
-              </DropdownMenuItem>
+              </DropdownMenu.Item>
             )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
       )}
       {showPicker && (
         <div
-          className={`absolute top-full z-20 mt-1 flex gap-1 rounded-full border border-border bg-background p-1 shadow-md ${
+          className={`bg-base absolute top-full z-20 mt-1 flex gap-1 rounded-full border border-neutral p-1 shadow-md ${
             isMine ? "right-0" : "left-0"
           }`}
         >
@@ -1013,7 +1020,7 @@ function Bubble({
               key={e}
               type="button"
               onClick={() => react(e)}
-              className="rounded-full px-1 py-0.5 text-base hover:bg-muted/40"
+              className="rounded-full px-1 py-0.5 text-base hover:bg-base-2/40"
             >
               {e}
             </button>
@@ -1058,7 +1065,7 @@ function Bubble({
                     node.setSelectionRange(node.value.length, node.value.length)
                   }
                 }}
-                className="min-h-0 rounded border-0 bg-background/30 px-2 py-1 text-foreground"
+                className="bg-base/30 min-h-0 rounded border-0 px-2 py-1 text-primary"
               />
               <div className="flex justify-end gap-2 text-[11px]">
                 <button
@@ -1080,11 +1087,10 @@ function Bubble({
             <>
               {message.media && <MessageImage media={message.media} />}
               {message.text && (
-                <p className="break-words whitespace-pre-wrap">
+                <p className="wrap-break-words whitespace-pre-wrap">
                   <RichText text={message.text} />
                 </p>
               )}
-              {message.text && <MacfolioCardFromText text={message.text} />}
               {!message.media && !message.text && (
                 <em className="opacity-70">[unsupported]</em>
               )}
@@ -1110,7 +1116,7 @@ function Bubble({
                 className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition ${
                   g.mine
                     ? "border-primary/40 bg-primary/10"
-                    : "border-border bg-background hover:bg-muted/40"
+                    : "bg-base border-neutral hover:bg-base-2/40"
                 }`}
               >
                 <span>{g.emoji}</span>
@@ -1128,11 +1134,12 @@ function Bubble({
 }
 
 function MessageImage({ media }: { media: PostMedia }) {
-  const url = pickVariantUrl(media, "medium")
-  const full = pickVariantUrl(media, "large") ?? url
+  const url = pickPrimaryMediaUrl(media, "medium")
+  const full =
+    pickPrimaryMediaUrl(media, "large") ?? pickPrimaryMediaUrl(media, "medium")
   if (!url) {
     return (
-      <div className="my-1 flex h-32 w-48 items-center justify-center rounded-md bg-background/30 text-xs">
+      <div className="bg-base/30 my-1 flex h-32 w-48 items-center justify-center rounded-md text-xs">
         {media.processingState === "failed" ? "media failed" : "processing…"}
       </div>
     )
@@ -1170,7 +1177,7 @@ function ThreadAppHeaderTitle({
   const back = (
     <Link
       to="/inbox"
-      className="shrink-0 text-xs text-muted-foreground hover:underline"
+      className="shrink-0 text-xs text-tertiary hover:underline"
     >
       ← Inbox
     </Link>
@@ -1195,17 +1202,17 @@ function ThreadAppHeaderTitle({
                 .slice(0, 1)
                 .toUpperCase()}
               src={m.avatarUrl}
-              className={`absolute size-6 ring-2 ring-background ${
+              className={`ring-base absolute size-6 ring-2 ${
                 i === 0 ? "top-0 left-0" : "right-0 bottom-0"
               }`}
             />
           ))}
         </div>
         <div className="flex min-w-0 flex-1 items-baseline gap-1.5 overflow-hidden text-sm">
-          <span className="min-w-0 truncate font-semibold text-foreground">
+          <span className="min-w-0 truncate font-semibold text-primary">
             {title}
           </span>
-          <span className="shrink-0 text-xs text-muted-foreground">
+          <span className="shrink-0 text-xs text-tertiary">
             · {n} member{n === 1 ? "" : "s"}
           </span>
         </div>
@@ -1224,19 +1231,19 @@ function ThreadAppHeaderTitle({
         />
       )}
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden text-sm">
-        <span className="truncate font-semibold text-foreground">
+        <span className="truncate font-semibold text-primary">
           {p?.displayName || (p?.handle ? `@${p.handle}` : "Conversation")}
         </span>
         {p?.isVerified && <VerifiedBadge size={14} role={p.role} />}
         {p?.handle && (
           <>
-            <span className="shrink-0 text-muted-foreground" aria-hidden>
+            <span className="shrink-0 text-tertiary" aria-hidden>
               ·
             </span>
             <Link
               to="/$handle"
               params={{ handle: p.handle }}
-              className="shrink-0 text-xs text-muted-foreground hover:underline"
+              className="shrink-0 text-xs text-tertiary hover:underline"
             >
               @{p.handle}
             </Link>
@@ -1355,10 +1362,7 @@ function GroupSettingsDialog({
         <div className="space-y-4">
           {isAdmin ? (
             <div className="space-y-2">
-              <Label
-                htmlFor="group-name"
-                className="text-xs text-muted-foreground"
-              >
+              <Label htmlFor="group-name" className="text-xs text-tertiary">
                 Name
               </Label>
               <div className="flex gap-2">
@@ -1377,7 +1381,7 @@ function GroupSettingsDialog({
             </div>
           ) : (
             <div className="text-sm">
-              <span className="text-muted-foreground">Name: </span>
+              <span className="text-tertiary">Name: </span>
               <span className="font-medium">
                 {conversation.title || "(no name)"}
               </span>
@@ -1385,10 +1389,10 @@ function GroupSettingsDialog({
           )}
 
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">
+            <Label className="text-xs text-tertiary">
               Members ({conversation.members.length})
             </Label>
-            <ul className="divide-y divide-border rounded-md border border-border">
+            <ul className="divide-y divide-neutral rounded-md border border-neutral">
               {conversation.members.map((m) => (
                 <li
                   key={m.id}
@@ -1411,21 +1415,17 @@ function GroupSettingsDialog({
                         <VerifiedBadge size={13} role={m.role} />
                       )}
                       {m.chatRole === "admin" && (
-                        <span className="text-xs text-muted-foreground">
-                          (admin)
-                        </span>
+                        <span className="text-xs text-tertiary">(admin)</span>
                       )}
                       {m.id === me && (
-                        <span className="text-xs text-muted-foreground">
-                          (you)
-                        </span>
+                        <span className="text-xs text-tertiary">(you)</span>
                       )}
                     </div>
                   </div>
                   {isAdmin && m.id !== me && (
                     <Button
                       size="sm"
-                      variant="ghost"
+                      variant="transparent"
                       disabled={busy}
                       onClick={() => remove(m.id)}
                     >
@@ -1441,7 +1441,7 @@ function GroupSettingsDialog({
             <div className="space-y-2">
               <Label
                 htmlFor="group-add-member"
-                className="text-xs text-muted-foreground"
+                className="text-xs text-tertiary"
               >
                 Add member
               </Label>
@@ -1452,13 +1452,13 @@ function GroupSettingsDialog({
                 placeholder="Search by handle or name"
               />
               {results.length > 0 && (
-                <ul className="divide-y divide-border rounded-md border border-border">
+                <ul className="divide-y divide-neutral rounded-md border border-neutral">
                   {results.slice(0, 6).map((u) => (
                     <li key={u.id}>
                       <button
                         type="button"
                         onClick={() => add(u)}
-                        className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition hover:bg-muted/30"
+                        className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition hover:bg-base-2/30"
                       >
                         <Avatar
                           initial={(u.displayName || u.handle || "?")
@@ -1478,7 +1478,7 @@ function GroupSettingsDialog({
                             )}
                           </div>
                           {u.handle && (
-                            <div className="truncate text-xs text-muted-foreground">
+                            <div className="truncate text-xs text-tertiary">
                               @{u.handle}
                             </div>
                           )}
@@ -1494,7 +1494,7 @@ function GroupSettingsDialog({
           {isAdmin && <InviteSection conversationId={conversation.id} />}
 
           <Button
-            variant="destructive"
+            variant="danger"
             size="sm"
             disabled={busy}
             onClick={leave}
@@ -1563,7 +1563,7 @@ function InviteSection({ conversationId }: { conversationId: string }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-muted-foreground">
+        <label className="text-xs font-medium text-tertiary">
           Invite links ({live.length})
         </label>
         <Button size="sm" variant="outline" disabled={busy} onClick={create}>
@@ -1571,34 +1571,34 @@ function InviteSection({ conversationId }: { conversationId: string }) {
         </Button>
       </div>
       {invites && invites.length === 0 && (
-        <p className="text-xs text-muted-foreground">No invite links yet.</p>
+        <p className="text-xs text-tertiary">No invite links yet.</p>
       )}
       {live.length > 0 && (
-        <ul className="divide-y divide-border rounded-md border border-border">
+        <ul className="divide-y divide-neutral rounded-md border border-neutral">
           {live.map((invite) => {
             const url = `${WEB_URL}/invite/${invite.token}`
             return (
               <li key={invite.id} className="space-y-1 px-3 py-2 text-xs">
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 truncate rounded bg-muted px-2 py-1 text-[11px]">
+                  <code className="flex-1 truncate rounded bg-base-2 px-2 py-1 text-[11px]">
                     {url}
                   </code>
                   <Button
                     size="sm"
-                    variant="ghost"
+                    variant="transparent"
                     onClick={() => copy(invite.token)}
                   >
                     {copied === invite.token ? "Copied" : "Copy"}
                   </Button>
                   <Button
                     size="sm"
-                    variant="ghost"
+                    variant="transparent"
                     onClick={() => revoke(invite.id)}
                   >
                     Revoke
                   </Button>
                 </div>
-                <p className="text-muted-foreground">
+                <p className="text-tertiary">
                   {invite.maxUses
                     ? `${invite.usedCount}/${invite.maxUses} uses · `
                     : `${invite.usedCount} uses · `}

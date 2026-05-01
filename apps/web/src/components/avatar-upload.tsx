@@ -1,6 +1,8 @@
 import { useRef, useState } from "react"
-import { CameraIcon, TrashIcon } from "@phosphor-icons/react"
+import { CameraIcon, TrashIcon } from "@heroicons/react/24/solid"
+import { Avatar } from "@workspace/ui/components/avatar"
 import { Button } from "@workspace/ui/components/button"
+import { Spinner } from "@workspace/ui/components/spinner"
 import { getPastedImageFiles } from "../lib/clipboard-images"
 import { pickVariantUrl, uploadImage } from "../lib/media"
 
@@ -66,60 +68,86 @@ export function AvatarUpload({
     void upload(files[0])
   }
 
-  return (
-    <div className="flex items-center gap-4">
+  const pickTarget = (
+    <div
+      className="relative"
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      onPaste={onPaste}
+    >
       <div
-        className="relative"
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-        onDrop={onDrop}
-        onPaste={onPaste}
+        className={
+          dragOver
+            ? "group rounded-full p-1 ring-2 ring-focus"
+            : "group rounded-full bg-base-1 p-1"
+        }
       >
-        <div
-          className={`size-20 overflow-hidden rounded-full ring-2 transition ${
-            dragOver ? "ring-primary" : "ring-background"
-          }`}
-        >
-          {currentUrl ? (
-            <img
-              src={currentUrl}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-muted text-2xl font-semibold text-foreground/80 uppercase">
-              {initial}
-            </div>
-          )}
-        </div>
-        <Button
-          variant="default"
-          size="icon"
+        <button
+          type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="absolute -right-1 -bottom-1 rounded-full"
           aria-label="upload avatar"
+          className="focus-visible:ring-offset-base-1 relative block cursor-pointer rounded-full focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
         >
-          <CameraIcon className="size-4" />
-        </Button>
-      </div>
-      <div className="flex flex-col gap-1 text-xs">
-        <span className="font-medium text-foreground">Avatar</span>
-        <span className="text-muted-foreground">
-          {uploading ? "uploading…" : "square images look best."}
-        </span>
-        {error && <span className="text-destructive">{error}</span>}
-        {currentUrl && !uploading && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onChange(null)}
-            className="mt-1 self-start text-destructive hover:underline"
+          <Avatar
+            initial={initial}
+            src={currentUrl}
+            size="xl"
+            className="size-28"
+          />
+          <span
+            aria-hidden
+            className={
+              dragOver
+                ? "absolute inset-0 rounded-full bg-base-1/30"
+                : "absolute inset-0 rounded-full bg-base-1/0 transition-[opacity,background-color] duration-100 ease-out group-hover:bg-base-1/10"
+            }
+          />
+          <span
+            className={
+              dragOver || uploading
+                ? "absolute inset-0 z-1 flex scale-100 items-center justify-center opacity-100 transition-[opacity,scale] duration-100 ease-out"
+                : "invisible absolute inset-0 z-1 flex scale-95 items-center justify-center opacity-0 transition-[opacity,scale] duration-100 ease-out group-hover:visible group-hover:scale-100 group-hover:opacity-100"
+            }
           >
-            <TrashIcon className="size-4" /> Remove
-          </Button>
-        )}
+            <span className="inline-flex size-8 items-center justify-center rounded-full bg-white/10 text-white/80 backdrop-blur-sm">
+              {uploading ? (
+                <Spinner className="size-4 text-inherit" />
+              ) : (
+                <CameraIcon className="size-4 text-inherit" />
+              )}
+            </span>
+          </span>
+        </button>
       </div>
+      {currentUrl && (
+        <Button
+          variant="outline"
+          size="md"
+          onClick={() => onChange(null)}
+          disabled={uploading}
+          className={
+            uploading
+              ? "pointer-events-none absolute right-0 bottom-0 rounded-full p-1 text-danger opacity-0"
+              : "absolute right-0 bottom-0 rounded-full p-1 text-danger hover:bg-base-2"
+          }
+          aria-label="remove avatar"
+        >
+          <TrashIcon className="size-4" />
+        </Button>
+      )}
+    </div>
+  )
+
+  return (
+    <div className="shrink-0">
+      {pickTarget}
+      {error ? (
+        <div className="mt-2 text-xs">
+          <p className="text-danger">{error}</p>
+        </div>
+      ) : null}
       <input
         ref={inputRef}
         type="file"

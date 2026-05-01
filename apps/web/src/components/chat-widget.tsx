@@ -2,21 +2,21 @@ import { useEffect, useRef, useState } from "react"
 import { MotionConfig, motion } from "motion/react"
 import {
   ArrowLeftIcon,
-  ChatIcon,
-  ImageIcon,
-  NotePencilIcon,
-  PaperPlaneTiltIcon,
-  XIcon,
-} from "@phosphor-icons/react"
+  ChatBubbleLeftIcon,
+  PaperAirplaneIcon,
+  PencilSquareIcon,
+  PhotoIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/solid"
 import { Link } from "@tanstack/react-router"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
+import { Avatar } from "@workspace/ui/components/avatar"
 import { api } from "../lib/api"
 import { getPastedImageFiles } from "../lib/clipboard-images"
 import { subscribeToDmStream } from "../lib/dm-stream"
-import { uploadImage } from "../lib/media"
+import { pickPrimaryMediaUrl, uploadImage } from "../lib/media"
 import { useMe } from "../lib/me"
-import { Avatar } from "./avatar"
 import type { DmConversation, DmMember, DmMessage } from "../lib/api"
 
 export function ChatWidget() {
@@ -108,7 +108,7 @@ export function ChatWidget() {
             height: { duration: 0.25, ease: [0.32, 0, 0, 1] },
             scale: { duration: 0.38, ease: [0.32, 0, 0, 1] },
           }}
-          className={`absolute right-0 bottom-0 w-80 overflow-hidden rounded-2xl border border-border bg-background shadow-xl ${isExpanded ? "" : "pointer-events-none"}`}
+          className={`absolute right-0 bottom-0 w-80 overflow-hidden rounded-2xl border border-neutral bg-base-1 shadow-xl ${isExpanded ? "" : "pointer-events-none"}`}
         >
           {activeConversation ? (
             <ChatView
@@ -131,11 +131,11 @@ export function ChatWidget() {
           initial={false}
           animate={{ opacity: isExpanded ? 0 : 1 }}
           transition={{ duration: 0.2, delay: isExpanded ? 0 : 0.15 }}
-          className={`flex size-14 cursor-pointer items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl shadow-primary/30 ${isExpanded ? "pointer-events-none" : ""} `}
+          className={`bg-primary text-primary-foreground shadow-primary/30 flex size-14 cursor-pointer items-center justify-center rounded-full shadow-xl ${isExpanded ? "pointer-events-none" : ""} `}
         >
-          <ChatIcon className="size-6" />
+          <ChatBubbleLeftIcon className="size-6" />
           {unreadCount > 0 && (
-            <span className="text-destructive-foreground absolute -top-1 -right-1 flex size-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold">
+            <span className="text-destructive-foreground bg-destructive absolute -top-1 -right-1 flex size-5 items-center justify-center rounded-full text-[10px] font-bold">
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}
@@ -156,31 +156,29 @@ function ConversationList({
 }) {
   return (
     <div className="flex flex-col">
-      <header className="flex items-center justify-between border-b border-border px-4 py-3">
+      <header className="flex items-center justify-between border-b border-neutral px-4 py-3">
         <h2 className="text-sm font-semibold">Messages</h2>
         <div className="flex items-center gap-1">
           <Button
-            size="icon-sm"
-            variant="ghost"
+            size="sm"
+            variant="transparent"
             nativeButton={false}
             render={<Link to="/inbox/new" onClick={onClose} />}
           >
-            <NotePencilIcon size={16} />
+            <PencilSquareIcon className="size-4" />
           </Button>
-          <Button size="icon-sm" variant="ghost" onClick={onClose}>
-            <XIcon size={16} />
+          <Button size="sm" variant="transparent" onClick={onClose}>
+            <XMarkIcon className="size-4" />
           </Button>
         </div>
       </header>
 
       <div className="flex-1 overflow-y-auto">
         {!conversations && (
-          <p className="p-4 text-sm text-muted-foreground">loading...</p>
+          <p className="p-4 text-sm text-tertiary">loading...</p>
         )}
         {conversations && conversations.length === 0 && (
-          <p className="p-4 text-sm text-muted-foreground">
-            no conversations yet
-          </p>
+          <p className="p-4 text-sm text-tertiary">no conversations yet</p>
         )}
         {conversations && conversations.length > 0 && (
           <ul>
@@ -212,17 +210,17 @@ function ConversationRow({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/20"
+      className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-base-2/20"
     >
       <ConversationAvatar conversation={conversation} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{title}</p>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="truncate text-xs text-tertiary">
           {preview ?? "no messages yet"}
         </p>
       </div>
       {conversation.unreadCount > 0 && (
-        <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+        <span className="bg-primary text-primary-foreground shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
           {conversation.unreadCount}
         </span>
       )}
@@ -369,33 +367,31 @@ function ChatView({
 
   return (
     <div
-      className="relative flex h-[32rem] max-h-[calc(100vh-6rem)] flex-col"
+      className="relative flex h-128 max-h-[calc(100vh-6rem)] flex-col"
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
       {dragOver && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-md border-2 border-dashed border-primary bg-primary/10 text-sm font-medium text-foreground">
+        <div className="border-primary bg-primary/10 pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-md border-2 border-dashed text-sm font-medium text-primary">
           Drop image to attach
         </div>
       )}
-      <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
-        <Button size="icon-sm" variant="ghost" onClick={onBack}>
-          <ArrowLeftIcon size={18} />
+      <header className="flex items-center gap-2 border-b border-neutral px-3 py-2.5">
+        <Button size="sm" variant="transparent" onClick={onBack}>
+          <ArrowLeftIcon className="size-[18px]" />
         </Button>
         <span className="flex-1 truncate text-sm font-semibold">{title}</span>
-        <Button size="icon-sm" variant="ghost" onClick={onClose}>
-          <XIcon size={16} />
+        <Button size="sm" variant="transparent" onClick={onClose}>
+          <XMarkIcon className="size-4" />
         </Button>
       </header>
 
       <div className="flex-1 overflow-y-auto px-3 py-2">
         {loading ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">
-            loading...
-          </p>
+          <p className="py-4 text-center text-sm text-tertiary">loading...</p>
         ) : messages.length === 0 ? (
-          <p className="py-4 text-center text-sm text-muted-foreground">
+          <p className="py-4 text-center text-sm text-tertiary">
             no messages yet
           </p>
         ) : (
@@ -411,30 +407,30 @@ function ChatView({
       </div>
 
       {pending && (
-        <div className="flex items-center gap-2 border-t border-border px-3 py-2">
+        <div className="flex items-center gap-2 border-t border-neutral px-3 py-2">
           <div className="relative">
             <img
               src={pending.previewUrl}
               alt="attachment preview"
-              className="size-14 rounded-md border border-border object-cover"
+              className="size-14 rounded-md border border-neutral object-cover"
             />
             <button
               type="button"
               onClick={clearPending}
               aria-label="remove attachment"
-              className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-background text-foreground shadow-sm ring-1 ring-border hover:bg-muted"
+              className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-base-1 text-primary shadow-sm ring-1 ring-neutral hover:bg-base-2"
             >
-              <XIcon size={12} />
+              <XMarkIcon className="size-3" />
             </button>
           </div>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-tertiary">
             {sending ? "sending…" : "attached"}
           </span>
         </div>
       )}
       <form
         onSubmit={handleSend}
-        className="flex items-center gap-1 border-t border-border px-2 py-2"
+        className="flex items-center gap-1 border-t border-neutral px-2 py-2"
       >
         <input
           ref={fileInputRef}
@@ -445,12 +441,12 @@ function ChatView({
         />
         <Button
           type="button"
-          size="icon-sm"
-          variant="ghost"
+          size="sm"
+          variant="transparent"
           onClick={() => fileInputRef.current?.click()}
           disabled={sending}
         >
-          <ImageIcon size={18} />
+          <PhotoIcon className="size-[18px]" />
         </Button>
         <Input
           ref={inputRef}
@@ -464,11 +460,11 @@ function ChatView({
         />
         <Button
           type="submit"
-          size="icon-sm"
-          variant="ghost"
+          size="sm"
+          variant="transparent"
           disabled={(!text.trim() && !pending) || sending}
         >
-          <PaperPlaneTiltIcon size={18} />
+          <PaperAirplaneIcon className="size-[18px]" />
         </Button>
       </form>
     </div>
@@ -491,29 +487,29 @@ function MessageBubble({
     <div className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
       <div
         className={`max-w-[80%] rounded-2xl px-3 py-2 ${
-          isMe ? "bg-primary text-primary-foreground" : "bg-muted"
+          isMe ? "bg-primary text-primary-foreground" : "bg-base-2"
         }`}
       >
         {!isMe && message.sender && (
-          <p className="mb-0.5 text-[10px] font-medium text-muted-foreground">
+          <p className="mb-0.5 text-[10px] font-medium text-tertiary">
             {message.sender.displayName || `@${message.sender.handle}`}
           </p>
         )}
         {message.media && (
           <img
-            src={message.media.variants[0]?.url}
+            src={pickPrimaryMediaUrl(message.media, "medium") ?? ""}
             alt=""
             className="mb-1 max-h-40 rounded-lg object-cover"
           />
         )}
         {message.text && (
-          <p className="text-sm break-words whitespace-pre-wrap">
+          <p className="wrap-break-words text-sm whitespace-pre-wrap">
             {message.text}
           </p>
         )}
         <p
           className={`mt-0.5 text-[10px] ${
-            isMe ? "text-primary-foreground/70" : "text-muted-foreground"
+            isMe ? "text-primary-foreground/70" : "text-tertiary"
           }`}
         >
           {time}
@@ -537,14 +533,14 @@ function ConversationAvatar({
           <Avatar
             initial={initialFor(a)}
             src={a.avatarUrl}
-            className="absolute top-0 left-0 size-6 ring-2 ring-background"
+            className="ring-base-1 absolute top-0 left-0 size-6 ring-2"
           />
         )}
         {b && (
           <Avatar
             initial={initialFor(b)}
             src={b.avatarUrl}
-            className="absolute right-0 bottom-0 size-6 ring-2 ring-background"
+            className="ring-base-1 absolute right-0 bottom-0 size-6 ring-2"
           />
         )}
       </div>

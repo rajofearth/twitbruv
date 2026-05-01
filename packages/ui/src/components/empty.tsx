@@ -1,9 +1,19 @@
-import * as React from "react"
-import { cva } from "class-variance-authority"
 import { cn } from "@workspace/ui/lib/utils"
-import type { VariantProps } from "class-variance-authority"
+import type { ReactNode } from "react"
 
-function Empty({ className, ...props }: React.ComponentProps<"div">) {
+const mediaVariantStyles = {
+  default: "bg-transparent",
+  icon: "flex size-8 shrink-0 items-center justify-center rounded-md bg-subtle text-primary [&_svg:not([class*='size-'])]:size-4",
+} as const
+
+export type EmptyMediaVariant = keyof typeof mediaVariantStyles
+
+export interface EmptyProps {
+  className?: string
+  children: ReactNode
+}
+
+export function Empty({ className, children }: EmptyProps) {
   return (
     <div
       data-slot="empty"
@@ -11,78 +21,69 @@ function Empty({ className, ...props }: React.ComponentProps<"div">) {
         "flex w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 rounded-xl border-dashed p-6 text-center text-balance",
         className
       )}
-      {...props}
-    />
+    >
+      {children}
+    </div>
   )
 }
 
-function EmptyHeader({ className, ...props }: React.ComponentProps<"div">) {
+export function EmptyHeader({ className, children }: EmptyProps) {
   return (
     <div
       data-slot="empty-header"
       className={cn("flex max-w-sm flex-col items-center gap-1", className)}
-      {...props}
-    />
+    >
+      {children}
+    </div>
   )
 }
 
-const emptyMediaVariants = cva(
-  "mb-2 flex shrink-0 items-center justify-center [&_svg]:pointer-events-none [&_svg]:shrink-0",
-  {
-    variants: {
-      variant: {
-        default: "bg-transparent",
-        icon: "flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground [&_svg:not([class*='size-'])]:size-4",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
-)
-
-function EmptyMedia({
-  className,
+export function EmptyMedia({
   variant = "default",
-  ...props
-}: React.ComponentProps<"div"> & VariantProps<typeof emptyMediaVariants>) {
+  className,
+  children,
+}: {
+  variant?: EmptyMediaVariant
+  className?: string
+  children: ReactNode
+}) {
   return (
     <div
       data-slot="empty-icon"
-      data-variant={variant}
-      className={cn(emptyMediaVariants({ variant, className }))}
-      {...props}
-    />
+      className={cn(
+        "mb-2 flex shrink-0 items-center justify-center [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        mediaVariantStyles[variant],
+        className
+      )}
+    >
+      {children}
+    </div>
   )
 }
 
-function EmptyTitle({ className, ...props }: React.ComponentProps<"div">) {
+export function EmptyTitle({ className, children }: EmptyProps) {
   return (
     <div
       data-slot="empty-title"
-      className={cn(
-        "font-heading text-sm font-medium tracking-tight",
-        className
-      )}
-      {...props}
-    />
+      className={cn("text-sm font-medium tracking-tight", className)}
+    >
+      {children}
+    </div>
   )
 }
 
-function EmptyDescription({ className, ...props }: React.ComponentProps<"p">) {
+export function EmptyDescription({ className, children }: EmptyProps) {
   return (
     <div
       data-slot="empty-description"
-      className={cn(
-        "text-xs/relaxed text-muted-foreground [&>a]:underline [&>a]:underline-offset-4 [&>a:hover]:text-primary",
-        className
-      )}
-      {...props}
-    />
+      className={cn("text-xs/relaxed text-secondary", className)}
+    >
+      {children}
+    </div>
   )
 }
 
-function EmptyContent({ className, ...props }: React.ComponentProps<"div">) {
+export function EmptyContent({ className, children }: EmptyProps) {
   return (
     <div
       data-slot="empty-content"
@@ -90,16 +91,8 @@ function EmptyContent({ className, ...props }: React.ComponentProps<"div">) {
         "flex w-full max-w-sm min-w-0 flex-col items-center gap-2 text-xs/relaxed text-balance",
         className
       )}
-      {...props}
-    />
+    >
+      {children}
+    </div>
   )
-}
-
-export {
-  Empty,
-  EmptyHeader,
-  EmptyTitle,
-  EmptyDescription,
-  EmptyContent,
-  EmptyMedia,
 }

@@ -10,7 +10,7 @@ import { handleRateLimitError } from '@workspace/rate-limit'
 import { requireHandle, type HonoEnv } from '../middleware/session.ts'
 import { linkHashtags } from '../lib/hashtags.ts'
 import { linkMentions } from '../lib/mentions.ts'
-import { notify } from '../lib/notify.ts'
+import { invalidateUnreadCounts, notify } from '../lib/notify.ts'
 import { homeFeedCacheKey } from './feed.ts'
 
 export const scheduledPostsRoute = new Hono<HonoEnv>()
@@ -139,6 +139,7 @@ scheduledPostsRoute.post('/:id/publish', async (c) => {
   const result = await publishScheduled(db, session.user.id, id)
   if (!result.ok) return c.json({ error: result.error }, result.status as never)
 
+  await invalidateUnreadCounts(cache, result.notifyRecipients)
   await cache.del(homeFeedCacheKey(session.user.id))
   c.get('ctx').track('scheduled_post_published', session.user.id)
   return c.json({ postId: result.postId })
@@ -167,9 +168,10 @@ async function assertMediaOwnership(
   if (owned.length !== ids.length) throw new HttpError(400, 'invalid_media_ids')
 }
 
-interface PublishResult {
+interface PublishSuccess {
   ok: true
   postId: string
+  notifyRecipients: Set<string>
 }
 interface PublishError {
   ok: false
@@ -177,13 +179,11 @@ interface PublishError {
   error: string
 }
 
-// Shared publishing logic used by the API endpoint and by the worker job. The author check
-// is enforced by callers (worker passes the row's authorId, the API passes the session user).
 export async function publishScheduled(
   db: import('@workspace/db').Database,
   authorId: string,
   scheduledId: string,
-): Promise<PublishResult | PublishError> {
+): Promise<PublishSuccess | PublishError> {
   return await db.transaction(async (tx) => {
     const [draft] = await tx
       .select()
@@ -231,7 +231,7 @@ export async function publishScheduled(
 
     await linkHashtags(tx, post.id, post.text)
     const mentioned = await linkMentions(tx, post.id, authorId, post.text)
-    await notify(
+    const notifyRecipients = await notify(
       tx,
       mentioned.map((uid) => ({
         userId: uid,
@@ -247,7 +247,7 @@ export async function publishScheduled(
       .set({ publishedAt: new Date(), publishedPostId: post.id })
       .where(eq(schema.scheduledPosts.id, scheduledId))
 
-    return { ok: true, postId: post.id }
+    return { ok: true as const, postId: post.id, notifyRecipients }
   })
 }
 

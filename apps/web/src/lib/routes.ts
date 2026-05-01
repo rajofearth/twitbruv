@@ -6,6 +6,10 @@ export interface RouteInfo {
 
 export function getRouteInfo(pathname: string): RouteInfo {
   if (pathname === "/") return { title: "Home", sub: "for you" }
+  if (pathname === "/login") return { title: "Sign in" }
+  if (pathname === "/signup") return { title: "Sign up" }
+  if (pathname === "/forgot-password") return { title: "Forgot password" }
+  if (pathname === "/reset-password") return { title: "Reset password" }
   if (pathname === "/search") return { title: "Search" }
   if (pathname === "/notifications") return { title: "Notifications" }
   if (pathname === "/inbox") return { title: "Messages" }
@@ -13,7 +17,6 @@ export function getRouteInfo(pathname: string): RouteInfo {
   if (pathname === "/bookmarks") return { title: "Bookmarks" }
   if (pathname.startsWith("/articles/new"))
     return { title: "New Article", back: true }
-  if (pathname === "/settings") return { title: "Settings", back: true }
   if (pathname === "/analytics") return { title: "Analytics", back: true }
   if (pathname.startsWith("/admin")) return { title: "Admin", back: true }
   if (pathname.startsWith("/hashtag/")) return { title: "Hashtag", back: true }
@@ -29,7 +32,9 @@ export function getRouteInfo(pathname: string): RouteInfo {
   if (
     pathname.match(/^\/[^/]+$/) &&
     !pathname.startsWith("/login") &&
-    !pathname.startsWith("/signup")
+    !pathname.startsWith("/signup") &&
+    !pathname.startsWith("/forgot-password") &&
+    !pathname.startsWith("/reset-password")
   ) {
     return { title: "Profile", back: true }
   }

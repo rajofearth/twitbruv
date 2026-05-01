@@ -1,10 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query"
 import { useVirtualizer, useWindowVirtualizer } from "@tanstack/react-virtual"
-import { SkeletonPostCard } from "@workspace/ui/components/skeleton"
+import { Skeleton } from "@workspace/ui/components/skeleton"
 import { PageEmpty, PageError } from "./page-surface"
-import { PostCard } from "./post-card"
-import { extractMacfolioUrl } from "./macfolio-card"
+import { FeedPostCard } from "./feed-post-card"
 import type { InfiniteData } from "@tanstack/react-query"
 import type { FeedPage, Post } from "../lib/api"
 
@@ -42,7 +41,7 @@ const useIsoLayoutEffect =
 
 const ESTIMATED_POST_HEIGHT = 280
 const ESTIMATED_MEDIA_BUMP = 320
-const ESTIMATED_MACFOLIO_BUMP = 460
+const ESTIMATED_LINK_CARD_BUMP = 260
 const ESTIMATED_QUOTE_BUMP = 110
 const ESTIMATED_ARTICLE_BUMP = 90
 const ESTIMATED_POLL_BUMP = 140
@@ -52,10 +51,13 @@ function estimatePostHeight(post: Post | undefined): number {
   const target = post.repostOf ?? post
   let height = ESTIMATED_POST_HEIGHT
   if (target.media && target.media.length > 0) height += ESTIMATED_MEDIA_BUMP
-  if (target.text && extractMacfolioUrl(target.text)) {
-    height += ESTIMATED_MACFOLIO_BUMP
+  const hasRichLinkCard =
+    target.cards?.some((c) => c.provider !== "article") ?? false
+  if (hasRichLinkCard) {
+    height += ESTIMATED_LINK_CARD_BUMP
   }
-  if (target.articleCard) height += ESTIMATED_ARTICLE_BUMP
+  if (target.cards?.some((c) => c.provider === "article"))
+    height += ESTIMATED_ARTICLE_BUMP
   if (target.poll) height += ESTIMATED_POLL_BUMP
   if (target.quoteOf) height += ESTIMATED_QUOTE_BUMP
   return height
@@ -65,20 +67,32 @@ export function Feed({
   queryKey,
   load,
   emptyMessage = "Nothing here yet.",
+  emptyState,
   prependItem,
   hideReplies = false,
   onlyReplies = false,
   renderActivityBanner,
+  quietPending = false,
+  onReady,
 }: {
   queryKey: FeedQueryKey
   load: (cursor?: string) => Promise<FeedLoaderPage | FeedPage>
+  /** Legacy fallback. Used when `emptyState` is not provided. */
   emptyMessage?: string
+  /** Fully-custom empty state. Takes precedence over `emptyMessage`. */
+  emptyState?: React.ReactNode
   prependItem?: Post | null
   hideReplies?: boolean
   onlyReplies?: boolean
   /** Optional banner rendered above each post card (e.g. "Lucas liked this"
    *  on the network feed). Returning null skips the banner for that row. */
   renderActivityBanner?: (post: Post) => React.ReactNode
+  /** When true, render `null` instead of the skeleton placeholders during the
+   *  initial pending state. Lets a parent show its own loading affordance. */
+  quietPending?: boolean
+  /** Fired the first time the query settles with data (or no data). The parent
+   *  can use this to know when it's safe to drop its own loading state. */
+  onReady?: () => void
 }) {
   const queryClient = useQueryClient()
   const queryKeyHash = JSON.stringify(queryKey)
@@ -130,58 +144,41 @@ export function Feed({
     return all
   }, [data, hideReplies, onlyReplies])
 
-  function replace(next: Post) {
-    queryClient.setQueryData<InfiniteData<FeedPage, string | undefined>>(
-      queryKey,
-      (current) => {
-        if (!current) return current
-        return {
-          ...current,
-          pages: current.pages.map((page) => ({
-            ...page,
-            posts: page.posts.map((p) => (p.id === next.id ? next : p)),
-          })),
-        }
-      }
-    )
-  }
+  const onReadyRef = useRef(onReady)
+  onReadyRef.current = onReady
+  useEffect(() => {
+    if (!isPending) onReadyRef.current?.()
+  }, [isPending])
 
-  function remove(id: string) {
-    queryClient.setQueryData<InfiniteData<FeedPage, string | undefined>>(
-      queryKey,
-      (current) => {
-        if (!current) return current
-        return {
-          ...current,
-          pages: current.pages.map((page) => ({
-            ...page,
-            posts: page.posts.filter((p) => p.id !== id),
-          })),
-        }
-      }
-    )
-  }
-
-  if (isPending)
+  if (isPending) {
+    if (quietPending) return null
     return (
       <div>
         {Array.from({ length: 4 }).map((_, i) => (
-          <SkeletonPostCard key={i} />
+          <div key={i} className="flex gap-3 px-4 py-4">
+            <Skeleton className="size-10 shrink-0 rounded-full" />
+            <div className="flex-1 space-y-3">
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-2/3" />
+            </div>
+          </div>
         ))}
       </div>
     )
+  }
   if (error) return <PageError message={error.message} className="px-4 py-6" />
-  if (posts.length === 0)
+  if (posts.length === 0) {
+    if (emptyState) return <>{emptyState}</>
     return <PageEmpty title="Nothing here yet" description={emptyMessage} />
+  }
 
   const renderRow = (post: Post) => {
     const banner = renderActivityBanner?.(post)
     return (
       <>
-        {banner && (
-          <div className="border-b border-border/50 px-4 pt-2">{banner}</div>
-        )}
-        <PostCard post={post} onChange={replace} onRemove={remove} />
+        {banner && <div className="pt-2 pr-4 pl-[68px]">{banner}</div>}
+        <FeedPostCard post={post} />
       </>
     )
   }
@@ -226,7 +223,7 @@ function FeedList(props: FeedListProps) {
           <div key={post.id}>{props.renderRow(post)}</div>
         ))}
         {props.hasNextPage && (
-          <div className="flex justify-center py-4 text-xs text-muted-foreground">
+          <div className="text-muted-foreground flex justify-center py-4 text-xs">
             {props.isFetchingNextPage ? "loading…" : ""}
           </div>
         )}
@@ -311,7 +308,7 @@ function WindowFeedList({
       </div>
       <div ref={sentinelRef} aria-hidden className="h-px" />
       {hasNextPage && (
-        <div className="flex justify-center py-4 text-xs text-muted-foreground">
+        <div className="text-muted-foreground flex justify-center py-4 text-xs">
           {isFetchingNextPage ? "loading…" : ""}
         </div>
       )}
@@ -377,7 +374,7 @@ function ContainerFeedList({
       </div>
       <div ref={sentinelRef} aria-hidden className="h-px" />
       {hasNextPage && (
-        <div className="flex justify-center py-4 text-xs text-muted-foreground">
+        <div className="text-muted-foreground flex justify-center py-4 text-xs">
           {isFetchingNextPage ? "loading…" : ""}
         </div>
       )}

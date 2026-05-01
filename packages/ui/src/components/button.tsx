@@ -1,56 +1,159 @@
-import { Button as ButtonPrimitive } from "@base-ui/react/button"
-import { cva } from "class-variance-authority"
+import { Button as BaseButton } from "@base-ui/react/button"
 import { cn } from "@workspace/ui/lib/utils"
-import type { VariantProps } from "class-variance-authority"
+import { Spinner } from "@workspace/ui/components/spinner"
+import type { ComponentProps, ReactNode } from "react"
 
-const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded border border-transparent bg-clip-padding text-[11.5px] font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/80",
-        outline:
-          "border-border hover:bg-input/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:bg-input/30",
-        secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
-        ghost:
-          "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
-        destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
-        link: "text-primary underline-offset-4 hover:underline",
-      },
-      size: {
-        default:
-          "h-[22px] gap-1 px-2 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        xs: "h-[18px] gap-1 px-1.5 text-[10px] has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&_svg:not([class*='size-'])]:size-2.5",
-        sm: "h-5 gap-1 px-1.5 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 [&_svg:not([class*='size-'])]:size-2.5",
-        lg: "h-7 gap-1 px-2.5 text-xs has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3.5",
-        icon: "size-[22px] [&_svg:not([class*='size-'])]:size-3",
-        "icon-xs": "size-[18px] [&_svg:not([class*='size-'])]:size-2.5",
-        "icon-sm": "size-5 [&_svg:not([class*='size-'])]:size-2.5",
-        "icon-lg": "size-7 [&_svg:not([class*='size-'])]:size-3.5",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  }
-)
+const variantConfig = {
+  primary: {
+    active: true,
+    bg: "bg-inverse",
+    bgClassName: "shadow-xs inset-shadow-primary group-hover/btn:bg-inverse/90",
+    text: "text-inverse",
+  },
+  outline: {
+    active: true,
+    bg: "bg-base-2",
+    bgClassName:
+      "border border-neutral shadow-xs group-hover/btn:bg-subtle group-active/btn:bg-subtle",
+    text: "text-primary",
+  },
+  secondary: {
+    active: true,
+    bg: "bg-subtle",
+    bgClassName: "group-hover/btn:bg-subtle/70",
+    text: "text-primary",
+  },
+  transparent: {
+    active: false,
+    bg: "",
+    bgClassName: "group-hover/btn:bg-subtle group-active/btn:bg-subtle",
+    text: "text-secondary",
+  },
+  danger: {
+    active: true,
+    bg: "bg-danger",
+    bgClassName:
+      "border border-danger shadow-xs group-hover/btn:bg-danger-strong group-active/btn:bg-danger-strong",
+    text: "text-danger-on",
+  },
+  "danger-light": {
+    active: true,
+    bg: "bg-danger-subtle",
+    bgClassName: "group-hover/btn:bg-danger/30 group-active/btn:bg-danger/50",
+    text: "text-danger",
+  },
+  glass: {
+    active: true,
+    bg: "bg-white/10 backdrop-blur-sm",
+    bgClassName: "group-hover/btn:bg-white/20 group-active/btn:bg-white/25",
+    text: "text-white/80",
+  },
+} as const
 
-function Button({
-  className,
-  variant = "default",
-  size = "default",
-  ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
-  return (
-    <ButtonPrimitive
-      data-slot="button"
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
-  )
+const sizeStyles = {
+  sm: { height: "h-7", padding: "px-1.5", textPadding: "px-1", icon: "w-7" },
+  md: { height: "h-8", padding: "px-2", textPadding: "px-1", icon: "w-8" },
+} as const
+
+export type ButtonVariant = keyof typeof variantConfig
+export type ButtonSize = keyof typeof sizeStyles
+
+export interface ButtonProps extends ComponentProps<typeof BaseButton> {
+  /** Visual style variant */
+  variant?: ButtonVariant
+  /** Size of the button */
+  size?: ButtonSize
+  /** Icon element rendered before the label */
+  iconLeft?: ReactNode
+  /** Icon element rendered after the label */
+  iconRight?: ReactNode
+  /** Show a loading spinner overlay */
+  loading?: boolean
 }
 
-export { Button, buttonVariants }
+export function Button({
+  variant = "outline",
+  size = "md",
+  iconLeft,
+  iconRight,
+  loading = false,
+  disabled,
+  className,
+  children,
+  ...props
+}: ButtonProps) {
+  const config = variantConfig[variant]
+  const s = sizeStyles[size]
+  const isIconOnly = !children && !iconRight
+  const sizeClass = isIconOnly
+    ? cn(s.height, s.icon)
+    : cn(s.height, s.padding, "w-fit")
+
+  return (
+    <BaseButton
+      disabled={disabled}
+      className={cn(
+        "group/btn relative inline-flex min-w-fit cursor-default items-center justify-center",
+        "rounded-full text-sm whitespace-pre select-none",
+        "ring-focus outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+        disabled && "pointer-events-none opacity-50",
+        config.text,
+        sizeClass,
+        className
+      )}
+      {...props}
+    >
+      {/* Hover/bg layer */}
+      <div
+        className={cn(
+          "absolute rounded-[inherit]",
+          config.bg,
+          config.bgClassName,
+          config.active ? "inset-0 opacity-100" : "inset-1 opacity-0",
+          !disabled && [
+            "transition-[inset,opacity,background-color] duration-150 ease-out-expo motion-reduce:transition-none",
+            "group-hover/btn:inset-0 group-hover/btn:opacity-100",
+            "group-active/btn:inset-px",
+          ]
+        )}
+      />
+
+      {iconLeft && (
+        <span
+          className={cn(
+            "relative z-[1] flex size-5 shrink-0 items-center justify-center [&>svg]:size-4",
+            loading && "opacity-0"
+          )}
+        >
+          {iconLeft}
+        </span>
+      )}
+      {children && (
+        <span
+          className={cn(
+            "relative z-[1] inline",
+            s.textPadding,
+            loading && "opacity-0"
+          )}
+        >
+          {children}
+        </span>
+      )}
+      {iconRight && (
+        <span
+          className={cn(
+            "relative z-[1] flex size-5 shrink-0 items-center justify-center [&>svg]:size-4",
+            loading && "opacity-0"
+          )}
+        >
+          {iconRight}
+        </span>
+      )}
+      {loading && (
+        <span className="absolute inset-0 z-[2] flex items-center justify-center">
+          <Spinner size="sm" />
+        </span>
+      )}
+    </BaseButton>
+  )
+}

@@ -68,7 +68,7 @@ function NewArticle() {
       title: "New article" as const,
       action: (
         <div className="flex items-center gap-2">
-          {error && <span className="text-xs text-destructive">{error}</span>}
+          {error && <span className="text-destructive text-xs">{error}</span>}
           <Button
             variant="outline"
             size="sm"
@@ -93,26 +93,24 @@ function NewArticle() {
 
   return (
     <PageFrame>
-      <main className="">
-        <div className="px-4 pt-6">
-          <CoverPicker onChange={setCoverMediaId} />
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="title"
-            className="mt-4 h-auto border-0 px-0 text-2xl font-semibold shadow-none focus-visible:ring-0"
-            maxLength={150}
-          />
-          <Input
-            value={subtitle}
-            onChange={(e) => setSubtitle(e.target.value)}
-            placeholder="subtitle (optional)"
-            className="mt-2 h-auto border-0 px-0 text-sm text-muted-foreground shadow-none focus-visible:ring-0"
-            maxLength={200}
-          />
-        </div>
-        <Editor onChange={setBody} />
-      </main>
+      <div className="px-4 pt-6">
+        <CoverPicker onChange={setCoverMediaId} />
+        <Input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="title"
+          className="mt-4 h-auto border-0 px-0 text-2xl font-semibold shadow-none focus-visible:ring-0"
+          maxLength={150}
+        />
+        <Input
+          value={subtitle}
+          onChange={(e) => setSubtitle(e.target.value)}
+          placeholder="subtitle (optional)"
+          className="text-muted-foreground mt-2 h-auto border-0 px-0 text-sm shadow-none focus-visible:ring-0"
+          maxLength={200}
+        />
+      </div>
+      <Editor onChange={setBody} />
     </PageFrame>
   )
 }

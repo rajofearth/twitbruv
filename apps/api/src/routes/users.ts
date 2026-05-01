@@ -16,9 +16,110 @@ import { loadPolls } from '../lib/polls.ts'
 import { parseCursor } from '../lib/cursor.ts'
 import { homeFeedCacheKey, profileFeedCacheKey } from './feed.ts'
 import { getGithubSnapshot } from '../lib/github-snapshot.ts'
-import { loadGithubCards } from '../lib/github-cards.ts'
+import { loadUnfurlCards } from '../lib/unfurl-cards.ts'
 
 export const usersRoute = new Hono<HonoEnv>()
+
+// Suggested accounts for the signed-in viewer. Powers the "Find people" CTA on
+// empty feeds and the default state of /search. Ranking strategy:
+//   1. Friends-of-friends — people followed by people the viewer follows, ordered
+//      by mutual count desc (more shared follows = stronger signal).
+//   2. Popular fallback — top accounts by follower count when (1) is sparse.
+// Both layers exclude: the viewer themselves, accounts the viewer already
+// follows, anyone in a mutual block relationship, anyone the viewer feed-mutes,
+// banned/deleted/handle-less accounts, and bots. Mounted BEFORE /:handle so the
+// parametric route doesn't swallow the literal segment.
+const SUGGESTED_USERS_LIMIT = 12
+
+usersRoute.get('/suggested', requireHandle(), async (c) => {
+  const session = c.get('session')!
+  const { db, mediaEnv, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'reads.profile')
+  const me = session.user.id
+  const limit = Math.min(Number(c.req.query('limit') ?? SUGGESTED_USERS_LIMIT), 30)
+
+  const exclusions = sql`
+    ${schema.users.id} <> ${me}
+    AND ${schema.users.deletedAt} IS NULL
+    AND ${schema.users.handle} IS NOT NULL
+    AND ${schema.users.banned} = false
+    AND ${schema.users.isBot} = false
+    AND NOT EXISTS (
+      SELECT 1 FROM ${schema.follows} f
+      WHERE f.follower_id = ${me} AND f.followee_id = ${schema.users.id}
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM ${schema.blocks} b
+      WHERE (b.blocker_id = ${me} AND b.blocked_id = ${schema.users.id})
+         OR (b.blocker_id = ${schema.users.id} AND b.blocked_id = ${me})
+    )
+    AND NOT EXISTS (
+      SELECT 1 FROM ${schema.mutes} m
+      WHERE m.muter_id = ${me} AND m.muted_id = ${schema.users.id}
+        AND (m.scope = 'feed' OR m.scope = 'both')
+    )
+  `
+
+  const friendsOfFriends = await db
+    .select({
+      user: schema.users,
+      mutuals: sql<number>`count(distinct ff.follower_id)::int`.as('mutuals'),
+    })
+    .from(schema.users)
+    .innerJoin(
+      sql`${schema.follows} ff`,
+      sql`ff.followee_id = ${schema.users.id}`,
+    )
+    .where(
+      and(
+        sql`ff.follower_id IN (
+          SELECT followee_id FROM ${schema.follows}
+          WHERE follower_id = ${me}
+        )`,
+        exclusions,
+      ),
+    )
+    .groupBy(schema.users.id)
+    .orderBy(sql`count(distinct ff.follower_id) DESC`, desc(schema.users.createdAt))
+    .limit(limit)
+
+  const users = friendsOfFriends.map((r) => publicUser(r.user, mediaEnv))
+
+  if (users.length < limit) {
+    const have = new Set(users.map((u) => u.id))
+    const popular = await db
+      .select({
+        user: schema.users,
+        followers: sql<number>`(
+          SELECT count(*)::int FROM ${schema.follows} f2
+          WHERE f2.followee_id = ${schema.users.id}
+        )`.as('followers'),
+      })
+      .from(schema.users)
+      .where(
+        and(
+          users.length > 0
+            ? sql`${schema.users.id} NOT IN (${sql.join(
+                users.map((u) => sql`${u.id}::uuid`),
+                sql`, `,
+              )})`
+            : undefined,
+          exclusions,
+        ),
+      )
+      .orderBy(
+        sql`(SELECT count(*) FROM ${schema.follows} f2 WHERE f2.followee_id = ${schema.users.id}) DESC`,
+        desc(schema.users.createdAt),
+      )
+      .limit(limit - users.length)
+    for (const r of popular) {
+      if (have.has(r.user.id)) continue
+      users.push(publicUser(r.user, mediaEnv))
+    }
+  }
+
+  return c.json({ users })
+})
 
 async function resolveHandle(db: HonoEnv['Variables']['ctx']['db'], raw: string) {
   const handle = raw.replace(/^@/, '')
@@ -203,11 +304,11 @@ usersRoute.get('/:handle/posts', async (c) => {
     // Build viewer-independent DTOs (no viewer flags, no repost/quote embeds — those are
     // layered on after, since they vary per viewer).
     const ids = allRows.map((r) => r.post.id)
-    const [mediaMap, articleMap, githubMap] = await Promise.all([
+    const [mediaMap, articleMap] = await Promise.all([
       loadPostMedia(db, ids),
       loadArticleCards(db, ids),
-      loadGithubCards(db, ids),
     ])
+    const unfurlCardsMap = await loadUnfurlCards(db, ids, articleMap)
     const cachedPosts: Array<PostDto> = allRows.map((r) => {
       const dto = toPostDto(
         r.post,
@@ -215,11 +316,11 @@ usersRoute.get('/:handle/posts', async (c) => {
         undefined,
         mediaMap.get(r.post.id),
         mediaEnv,
-        articleMap.get(r.post.id),
+        unfurlCardsMap.get(r.post.id),
         undefined,
         undefined,
         undefined,
-        githubMap.get(r.post.id),
+
       )
       if (pinnedRow && r.post.id === pinnedRow.post.id) {
         ;(dto as { pinned?: boolean }).pinned = true

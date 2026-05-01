@@ -3,29 +3,35 @@ import {
   Link,
   Outlet,
   Scripts,
-  createRootRoute,
+  createRootRouteWithContext,
 } from "@tanstack/react-router"
-import { IconContext } from "@phosphor-icons/react"
+import { QueryClientProvider } from "@tanstack/react-query"
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools"
 import { Databuddy } from "@databuddy/sdk/react"
 import { DatabuddyDevtools } from "@databuddy/devtools/react"
 import { Toaster } from "sonner"
+import { QuestionMarkCircleIcon } from "@heroicons/react/24/solid"
 import appCss from "@workspace/ui/globals.css?url"
 import { Button } from "@workspace/ui/components/button"
+import { Agentation } from "agentation"
 import { AppShell } from "../components/app-shell"
 import { EmailVerifiedGate } from "../components/email-verified-gate"
 import { MaintenanceScreen } from "../components/maintenance-screen"
-import { NotFoundPanel } from "../components/page-surface"
+import { PageEmpty } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
 import { ThemeProvider, themeBootstrapScript, useTheme } from "../lib/theme"
 import { APP_NAME, DATABUDDY_CLIENT_ID } from "../lib/env"
 import { useMaintenance } from "../lib/maintenance"
 import { MeProvider } from "../lib/me"
-import { QueryProvider } from "../lib/query"
+import { queryClient } from "../lib/query-client"
 import { buildSeoMeta } from "../lib/seo"
+import { getServerAuthState } from "../lib/auth-fns"
+import type { RouterAppContext } from "../lib/router-context"
 
 const DESCRIPTION = `${APP_NAME} — open-source, free-for-everyone social platform. No AI ranking, no paywalls, no ads.`
 
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<RouterAppContext>()({
+  loader: () => getServerAuthState(),
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -58,23 +64,32 @@ export const Route = createRootRoute({
   notFoundComponent: () => (
     <AppShell>
       <PageFrame>
-        <NotFoundPanel
+        <PageEmpty
+          className="w-full"
+          icon={<QuestionMarkCircleIcon />}
           title="Page not found"
-          message="That URL does not exist or was removed."
-        >
-          <div className="flex flex-wrap justify-center gap-2">
-            <Button nativeButton={false} render={<Link to="/" />}>
-              Home
-            </Button>
-            <Button
-              variant="outline"
-              nativeButton={false}
-              render={<Link to="/search" />}
-            >
-              Search
-            </Button>
-          </div>
-        </NotFoundPanel>
+          description="That URL does not exist or was removed."
+          actions={
+            <>
+              <Button
+                size="sm"
+                variant="primary"
+                nativeButton={false}
+                render={<Link to="/" />}
+              >
+                Home
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                nativeButton={false}
+                render={<Link to="/search" />}
+              >
+                Search
+              </Button>
+            </>
+          }
+        />
       </PageFrame>
     </AppShell>
   ),
@@ -83,37 +98,41 @@ export const Route = createRootRoute({
 })
 
 function RootComponent() {
+  const { user: initialMe } = Route.useLoaderData()
+
   return (
-    <IconContext.Provider value={{ weight: "duotone" }}>
-      <ThemeProvider>
-        <MaintenanceGate>
-          <QueryProvider>
-            <MeProvider>
-              <EmailVerifiedGate>
-                <AppShell>
-                  <Outlet />
-                </AppShell>
-              </EmailVerifiedGate>
-              <ThemedToaster />
-              {DATABUDDY_CLIENT_ID ? (
-                <Databuddy
-                  clientId={DATABUDDY_CLIENT_ID}
-                  trackWebVitals
-                  trackErrors
-                  trackPerformance
-                  trackOutgoingLinks
-                  trackInteractions
-                  enableBatching
-                  batchSize={20}
-                  maskPatterns={["/inbox/*", "/admin/*"]}
-                />
-              ) : null}
-              <DatabuddyDevtools enabled={import.meta.env.DEV} />
-            </MeProvider>
-          </QueryProvider>
-        </MaintenanceGate>
-      </ThemeProvider>
-    </IconContext.Provider>
+    <ThemeProvider>
+      <MaintenanceGate>
+        <QueryClientProvider client={queryClient}>
+          <MeProvider initialMe={initialMe}>
+            <EmailVerifiedGate>
+              <AppShell>
+                <Outlet />
+              </AppShell>
+            </EmailVerifiedGate>
+            <ThemedToaster />
+            {DATABUDDY_CLIENT_ID ? (
+              <Databuddy
+                clientId={DATABUDDY_CLIENT_ID}
+                trackWebVitals
+                trackErrors
+                trackPerformance
+                trackOutgoingLinks
+                trackInteractions
+                enableBatching
+                batchSize={20}
+                maskPatterns={["/inbox/*", "/admin/*"]}
+              />
+            ) : null}
+            {process.env.NODE_ENV === "development" && <Agentation />}
+            <DatabuddyDevtools enabled={import.meta.env.DEV} />
+          </MeProvider>
+          {import.meta.env.DEV ? (
+            <ReactQueryDevtools buttonPosition="bottom-left" />
+          ) : null}
+        </QueryClientProvider>
+      </MaintenanceGate>
+    </ThemeProvider>
   )
 }
 
@@ -122,13 +141,17 @@ function ThemedToaster() {
   return <Toaster theme={resolvedTheme} richColors closeButton />
 }
 
-// Whole-app lockout. When build-time VITE_PUBLIC_MAINTENANCE_MODE is set, or the api wrapper
-// has seen a 503 maintenance response, swap the entire app for the maintenance screen. Sits
-// inside ThemeProvider so the screen still respects the user's theme but outside the query
-// + me providers so we don't keep retrying API calls behind the lockout.
 function MaintenanceGate({ children }: { children: React.ReactNode }) {
-  const { active, message } = useMaintenance()
-  if (active) return <MaintenanceScreen message={message} />
+  const {
+    active,
+    //  message
+  } = useMaintenance()
+  if (active)
+    return (
+      <MaintenanceScreen
+      // message={message}
+      />
+    )
   return <>{children}</>
 }
 

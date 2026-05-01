@@ -6,18 +6,20 @@
   "exports": {
     ".": "./src/index.ts",
     "./card": "./src/card.ts",
-    "./urls": "./src/urls.ts"
+    "./urls": "./src/urls.ts",
+    "./language-colors": "./src/language-colors.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@octokit/request": "^10.0.8",
-    "@workspace/db": "workspace:*"
+    "@workspace/db": "workspace:*",
+    "@workspace/url-unfurl-core": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^25.1.0",
+    "@types/node": "^25.6.0",
     "@workspace/config-tsconfig": "workspace:*",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }

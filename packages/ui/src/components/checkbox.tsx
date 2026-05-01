@@ -1,32 +1,29 @@
-"use client"
-
 import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox"
-import { CheckIcon, MinusIcon } from "@phosphor-icons/react"
-
+import { CheckIcon, MinusIcon } from "@heroicons/react/16/solid"
 import { cn } from "@workspace/ui/lib/utils"
 
-function Checkbox({ className, ...props }: CheckboxPrimitive.Root.Props) {
+export interface CheckboxProps extends CheckboxPrimitive.Root.Props {}
+
+export function Checkbox({ className, ...props }: CheckboxProps) {
   return (
     <CheckboxPrimitive.Root
-      data-slot="checkbox"
       className={cn(
-        "peer size-4 shrink-0 rounded-sm border border-input bg-input/20 transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 data-indeterminate:border-primary data-indeterminate:bg-primary data-indeterminate:text-primary-foreground dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground",
+        "peer size-4 shrink-0 rounded-sm border border-neutral bg-base-2 transition-colors outline-none",
+        "focus-visible:border-neutral-strong focus-visible:ring-2 focus-visible:ring-neutral/30",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        "data-checked:border-inverse data-checked:bg-inverse data-checked:text-inverse",
+        "data-indeterminate:border-inverse data-indeterminate:bg-inverse data-indeterminate:text-inverse",
         className
       )}
       {...props}
     >
-      <CheckboxPrimitive.Indicator
-        data-slot="checkbox-indicator"
-        className="flex items-center justify-center text-current"
-      >
+      <CheckboxPrimitive.Indicator className="flex items-center justify-center text-current">
         {props.indeterminate ? (
-          <MinusIcon className="size-3" weight="bold" />
+          <MinusIcon className="size-3" />
         ) : (
-          <CheckIcon className="size-3" weight="bold" />
+          <CheckIcon className="size-3" />
         )}
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   )
 }
-
-export { Checkbox }

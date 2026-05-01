@@ -1,12 +1,21 @@
+import { passkey } from "@better-auth/passkey"
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { magicLink } from "better-auth/plugins/magic-link"
 import { twoFactor } from "better-auth/plugins/two-factor"
 import { admin as adminPlugin } from "better-auth/plugins/admin"
 import type { Database } from "@workspace/db"
+import { COOKIE_PREFIX } from "./constants.ts"
 
-// Passkey support is a follow-up: better-auth ships passkeys as a separate plugin package.
-// Wire it in at M2 once the signup flow lands.
+function resolvePasskeyRpId(authBaseURL: string, explicit?: string) {
+  const trimmed = explicit?.trim()
+  if (trimmed) return trimmed
+  try {
+    return new URL(authBaseURL).hostname
+  } catch {
+    return "localhost"
+  }
+}
 
 export interface AuthConfig {
   db: Database
@@ -15,6 +24,7 @@ export interface AuthConfig {
   trustedOrigins: Array<string>
   cookieDomain?: string
   appName: string
+  passkeyRpId?: string
   sendEmail: (args: {
     to: string
     subject: string
@@ -41,12 +51,10 @@ export function createAuth(config: AuthConfig) {
     session: {
       expiresIn: 60 * 60 * 24 * 30, // 30 days
       updateAge: 60 * 60 * 24, // 1 day
-      // Short TTL so admin actions that revoke a session (ban, delete, etc. — all of which
-      // wipe the row from `sessions`) take effect within ~30s instead of waiting up to the
-      // cache window. Better-auth caches the session in a signed cookie alongside the
-      // session token, and the cache cookie remains valid until it expires regardless of
-      // DB state, so this window is the worst-case lag for forced logout.
-      cookieCache: { enabled: true, maxAge: 30 },
+      // Cookie cache TTL (seconds). Too short forces constant DB revalidation and made
+      // sessions feel broken (~30s). Better-auth defaults to 5 minutes; that still bounds
+      // worst-case lag for forced logout (revoke/ban) vs trusting stale session_data.
+      cookieCache: { enabled: true, maxAge: 5 * 60 },
     },
     advanced: {
       // Our auth tables use uuid PKs with defaultRandom() in Postgres.
@@ -54,7 +62,7 @@ export function createAuth(config: AuthConfig) {
       database: {
         generateId: false,
       },
-      cookiePrefix: "twotter",
+      cookiePrefix: COOKIE_PREFIX,
       cookies: {
         session_token: {
           attributes: {
@@ -75,6 +83,7 @@ export function createAuth(config: AuthConfig) {
       requireEmailVerification: false,
       minPasswordLength: 10,
       autoSignIn: true,
+      revokeSessionsOnPasswordReset: true,
       sendResetPassword: async ({ user, url }) => {
         await config.sendEmail({
           to: user.email,
@@ -126,6 +135,10 @@ export function createAuth(config: AuthConfig) {
         : {}),
     },
     plugins: [
+      passkey({
+        rpName: config.appName,
+        rpID: resolvePasskeyRpId(config.baseURL, config.passkeyRpId),
+      }),
       magicLink({
         sendMagicLink: async ({ email, url }) => {
           await config.sendEmail({

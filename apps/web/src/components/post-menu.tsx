@@ -1,20 +1,15 @@
 import { useState } from "react"
 import {
-  DotsThreeIcon,
+  EllipsisHorizontalIcon,
   EyeIcon,
   EyeSlashIcon,
   FlagIcon,
-  PencilIcon,
-  PushPinIcon,
+  MapPinIcon,
+  PencilSquareIcon,
   TrashIcon,
-} from "@phosphor-icons/react"
+} from "@heroicons/react/24/solid"
 import { Button } from "@workspace/ui/components/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@workspace/ui/components/dropdown-menu"
+import { DropdownMenu } from "@workspace/ui/components/dropdown-menu"
 import { ApiError, api } from "../lib/api"
 import { authClient } from "../lib/auth"
 import { ReportDialog } from "./report-dialog"
@@ -105,60 +100,60 @@ export function PostMenu({
         className={className}
         onClick={(event) => event.stopPropagation()}
       >
-        <DropdownMenu>
-          <DropdownMenuTrigger
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger
             render={
               <Button
-                variant="ghost"
-                size="icon-sm"
+                variant="transparent"
+                size="sm"
                 aria-label="Post menu"
                 className="size-5"
               >
-                <DotsThreeIcon size={12} />
+                <EllipsisHorizontalIcon className="size-3" />
               </Button>
             }
           />
-          <DropdownMenuContent align="end" sideOffset={4} className="w-40">
+          <DropdownMenu.Content align="end" sideOffset={4} className="w-40">
             {isOwner && canEdit && (
-              <DropdownMenuItem onClick={() => onStartEdit?.()}>
-                <PencilIcon size={14} />
+              <DropdownMenu.Item onClick={() => onStartEdit?.()}>
+                <PencilSquareIcon className="size-3.5" />
                 <span>Edit</span>
-              </DropdownMenuItem>
+              </DropdownMenu.Item>
             )}
             {isOwner && !isRepost && !post.replyToId && !post.quoteOfId && (
-              <DropdownMenuItem onClick={togglePin}>
-                <PushPinIcon size={14} />
+              <DropdownMenu.Item onClick={togglePin}>
+                <MapPinIcon className="size-3.5" />
                 <span>{post.pinned ? "Unpin" : "Pin to profile"}</span>
-              </DropdownMenuItem>
+              </DropdownMenu.Item>
             )}
             {isOwner && (
-              <DropdownMenuItem
-                variant="destructive"
+              <DropdownMenu.Item
+                variant="danger"
                 onClick={onDelete}
                 disabled={busy}
               >
-                <TrashIcon size={14} />
+                <TrashIcon className="size-3.5" />
                 <span>Delete</span>
-              </DropdownMenuItem>
+              </DropdownMenu.Item>
             )}
             {canHide && !isOwner && (
-              <DropdownMenuItem onClick={toggleHide}>
+              <DropdownMenu.Item onClick={toggleHide}>
                 {post.hidden ? (
-                  <EyeIcon size={14} />
+                  <EyeIcon className="size-3.5" />
                 ) : (
-                  <EyeSlashIcon size={14} />
+                  <EyeSlashIcon className="size-3.5" />
                 )}
                 <span>{post.hidden ? "Unhide reply" : "Hide reply"}</span>
-              </DropdownMenuItem>
+              </DropdownMenu.Item>
             )}
             {!isOwner && (
-              <DropdownMenuItem onClick={() => setReportOpen(true)}>
-                <FlagIcon size={14} />
+              <DropdownMenu.Item onClick={() => setReportOpen(true)}>
+                <FlagIcon className="size-3.5" />
                 <span>Report</span>
-              </DropdownMenuItem>
+              </DropdownMenu.Item>
             )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
       </div>
       <ReportDialog
         open={reportOpen}

@@ -10,24 +10,28 @@ import {
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query"
 import { useVirtualizer, useWindowVirtualizer } from "@tanstack/react-virtual"
 import {
-  AtIcon,
-  ChatCircleIcon,
+  ArrowPathIcon,
+  AtSymbolIcon,
+  BellIcon,
+  ChatBubbleBottomCenterTextIcon,
+  ChatBubbleOvalLeftIcon,
   HeartIcon,
-  QuotesIcon,
-  RepeatIcon,
   UserPlusIcon,
-} from "@phosphor-icons/react"
+} from "@heroicons/react/24/solid"
 import { Button } from "@workspace/ui/components/button"
-import { Skeleton, SkeletonAvatar } from "@workspace/ui/components/skeleton"
+import { Skeleton } from "@workspace/ui/components/skeleton"
+import { Avatar } from "@workspace/ui/components/avatar"
 import { api } from "../lib/api"
+import { qk } from "../lib/query-keys"
 import { authClient } from "../lib/auth"
-import { Avatar } from "../components/avatar"
 import { usePageHeader } from "../components/app-page-header"
+import { useCompose } from "../components/compose-provider"
+import { PageEmpty } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
 import { VerifiedBadge } from "../components/verified-badge"
 import { useInfiniteScrollSentinel } from "../lib/use-infinite-scroll-sentinel"
 import type { InfiniteData } from "@tanstack/react-query"
-import type { NotificationItem, Post } from "../lib/api"
+import type { ArticleUnfurlCard, NotificationItem, Post } from "../lib/api"
 
 export const Route = createFileRoute("/notifications")({
   component: Notifications,
@@ -38,8 +42,7 @@ interface NotificationsPage {
   nextCursor: string | null
 }
 
-const NOTIFICATIONS_QUERY_KEY = ["notifications"] as const
-type NotificationsQueryKey = typeof NOTIFICATIONS_QUERY_KEY
+type NotificationsQueryKey = ReturnType<typeof qk.notifications.list>
 
 const ESTIMATED_NOTIFICATION_HEIGHT = 140
 
@@ -69,6 +72,7 @@ function Notifications() {
   const router = useRouter()
   const { data: session, isPending: sessionPending } = authClient.useSession()
   const queryClient = useQueryClient()
+  const { open: openCompose } = useCompose()
 
   useEffect(() => {
     if (!sessionPending && !session) router.navigate({ to: "/login" })
@@ -88,18 +92,23 @@ function Notifications() {
     NotificationsQueryKey,
     string | undefined
   >({
-    queryKey: NOTIFICATIONS_QUERY_KEY,
+    queryKey: qk.notifications.list(),
     queryFn: ({ pageParam }) => api.notifications(pageParam),
     initialPageParam: undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     enabled: !!session,
   })
 
-  // Mark everything as read on arrival. Fire-and-forget.
   useEffect(() => {
     if (!session) return
-    api.notificationsMarkRead({ all: true }).catch(() => {})
-  }, [session])
+    api
+      .notificationsMarkRead({ all: true })
+      .then(() => {
+        queryClient.setQueryData(qk.notifications.unread(), { count: 0 })
+        queryClient.invalidateQueries({ queryKey: qk.notifications.unread() })
+      })
+      .catch(() => {})
+  }, [session, queryClient])
 
   const items = useMemo(
     () => data?.pages.flatMap((p) => p.notifications) ?? [],
@@ -108,10 +117,11 @@ function Notifications() {
 
   const markAllRead = useCallback(async () => {
     await api.notificationsMarkRead({ all: true })
+    queryClient.setQueryData(qk.notifications.unread(), { count: 0 })
     const now = new Date().toISOString()
     queryClient.setQueryData<
       InfiniteData<NotificationsPage, string | undefined>
-    >(NOTIFICATIONS_QUERY_KEY, (current) => {
+    >(qk.notifications.list(), (current) => {
       if (!current) return current
       return {
         ...current,
@@ -133,7 +143,7 @@ function Notifications() {
       action: (
         <Button
           size="sm"
-          variant="ghost"
+          variant="transparent"
           disabled={!hasUnread}
           onClick={markAllRead}
         >
@@ -147,40 +157,52 @@ function Notifications() {
 
   return (
     <PageFrame>
-      <main>
-        {isPending ? (
-          <div>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex items-start gap-3 border-b border-border px-4 py-3"
-              >
-                <SkeletonAvatar className="size-10" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-2/3" />
-                  <Skeleton className="h-3 w-1/3" />
-                </div>
+      {isPending ? (
+        <div>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-start gap-3 border-b border-neutral px-4 py-3"
+            >
+              <Skeleton className="size-10 shrink-0 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-1/3" />
               </div>
-            ))}
-          </div>
-        ) : error ? (
-          <p className="p-4 text-sm text-destructive">{error.message}</p>
-        ) : items.length === 0 ? (
-          <div className="px-4 py-16 text-center">
-            <p className="text-sm font-semibold">All caught up</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              New likes, replies, mentions, and follows will show up here.
-            </p>
-          </div>
-        ) : (
-          <NotificationsList
-            items={items}
-            hasNextPage={!!hasNextPage}
-            isFetchingNextPage={isFetchingNextPage}
-            fetchNextPage={fetchNextPage}
-          />
-        )}
-      </main>
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <p className="text-destructive p-4 text-sm">{error.message}</p>
+      ) : items.length === 0 ? (
+        <PageEmpty
+          icon={<BellIcon />}
+          title="All caught up"
+          description="New likes, replies, mentions, follows, and reposts will land here. Post or follow people to get the conversation going."
+          actions={
+            <>
+              <Button size="sm" variant="primary" onClick={() => openCompose()}>
+                Write a post
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                nativeButton={false}
+                render={<Link to="/search" />}
+              >
+                Find people
+              </Button>
+            </>
+          }
+        />
+      ) : (
+        <NotificationsList
+          items={items}
+          hasNextPage={!!hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
+          fetchNextPage={fetchNextPage}
+        />
+      )}
     </PageFrame>
   )
 }
@@ -212,7 +234,7 @@ function NotificationsList(props: NotificationsListProps) {
           <NotificationRow key={item.id} item={item} />
         ))}
         {props.hasNextPage && (
-          <div className="flex justify-center py-4 text-xs text-muted-foreground">
+          <div className="flex justify-center py-4 text-xs text-tertiary">
             {props.isFetchingNextPage ? "loading…" : ""}
           </div>
         )}
@@ -294,7 +316,7 @@ function WindowNotificationsList({
       </div>
       <div ref={sentinelRef} aria-hidden className="h-px" />
       {hasNextPage && (
-        <div className="flex justify-center py-4 text-xs text-muted-foreground">
+        <div className="flex justify-center py-4 text-xs text-tertiary">
           {isFetchingNextPage ? "loading…" : ""}
         </div>
       )}
@@ -355,7 +377,7 @@ function ContainerNotificationsList({
       </div>
       <div ref={sentinelRef} aria-hidden className="h-px" />
       {hasNextPage && (
-        <div className="flex justify-center py-4 text-xs text-muted-foreground">
+        <div className="flex justify-center py-4 text-xs text-tertiary">
           {isFetchingNextPage ? "loading…" : ""}
         </div>
       )}
@@ -378,15 +400,15 @@ function NotificationRow({ item }: { item: NotificationItem }) {
 
   return (
     <div
-      className={`border-b border-border px-4 py-3 transition-colors hover:bg-muted/20 ${
-        !item.readAt ? "bg-primary/5" : ""
+      className={`border-b border-neutral px-4 py-3 transition-colors hover:bg-base-2/20 ${
+        !item.readAt ? "bg-subtle" : ""
       }`}
     >
       <div className="flex items-start gap-3">
         <div
           className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full ${iconClass}`}
         >
-          <Icon size={18} />
+          <Icon className="size-[18px]" />
         </div>
         <div className="min-w-0 flex-1 text-sm">
           {actorHandle ? (
@@ -398,14 +420,14 @@ function NotificationRow({ item }: { item: NotificationItem }) {
               <Avatar
                 initial={actorInitial}
                 src={item.actor?.avatarUrl}
-                className="size-8 ring-1 ring-border"
+                className="size-8 ring-1 ring-neutral"
               />
             </Link>
           ) : (
             <Avatar
               initial={actorInitial}
               src={item.actor?.avatarUrl}
-              className="size-8 ring-1 ring-border"
+              className="size-8 ring-1 ring-neutral"
             />
           )}
           <p className="mt-2">
@@ -428,11 +450,11 @@ function NotificationRow({ item }: { item: NotificationItem }) {
                 )}
               </span>
             )}{" "}
-            <span className="text-muted-foreground">{verb}</span>
+            <span className="text-tertiary">{verb}</span>
           </p>
           {item.target && <TargetCard post={item.target} />}
           <time
-            className="mt-1 block text-xs text-muted-foreground"
+            className="mt-1 block text-xs text-tertiary"
             dateTime={item.createdAt}
           >
             {new Date(item.createdAt).toLocaleString()}
@@ -457,25 +479,35 @@ function TargetCard({ post }: { post: Post }) {
     thumb?.variants[0]
 
   const body = (
-    <div className="mt-2 overflow-hidden rounded-md border border-border transition hover:bg-muted/40">
+    <div className="mt-2 overflow-hidden rounded-md border border-neutral transition hover:bg-base-2/40">
       <div className="flex gap-3 p-3">
         <div className="min-w-0 flex-1">
           {post.text ? (
-            <p className="line-clamp-4 text-sm leading-relaxed break-words whitespace-pre-wrap">
+            <p className="wrap-break-words line-clamp-4 text-sm leading-relaxed whitespace-pre-wrap">
               {post.text}
             </p>
-          ) : post.articleCard ? (
-            <p className="line-clamp-2 text-sm">
-              <span className="font-semibold">{post.articleCard.title}</span>
-              {post.articleCard.subtitle && (
-                <span className="text-muted-foreground">
-                  {" "}
-                  — {post.articleCard.subtitle}
-                </span>
-              )}
-            </p>
           ) : (
-            <p className="text-sm text-muted-foreground italic">[media post]</p>
+            (() => {
+              const article = post.cards?.find(
+                (c): c is ArticleUnfurlCard => c.provider === "article"
+              )
+              if (article) {
+                return (
+                  <p className="line-clamp-2 text-sm">
+                    <span className="font-semibold">{article.title}</span>
+                    {article.subtitle && (
+                      <span className="text-tertiary">
+                        {" "}
+                        — {article.subtitle}
+                      </span>
+                    )}
+                  </p>
+                )
+              }
+              return (
+                <p className="text-sm text-tertiary italic">[media post]</p>
+              )
+            })()
           )}
         </div>
         {variant && (
@@ -510,16 +542,16 @@ function iconForKind(kind: NotificationItem["kind"]) {
     case "like":
       return HeartIcon
     case "repost":
-      return RepeatIcon
+      return ArrowPathIcon
     case "reply":
     case "article_reply":
-      return ChatCircleIcon
+      return ChatBubbleOvalLeftIcon
     case "quote":
-      return QuotesIcon
+      return ChatBubbleBottomCenterTextIcon
     case "follow":
       return UserPlusIcon
     case "mention":
-      return AtIcon
+      return AtSymbolIcon
     default:
       return HeartIcon
   }
@@ -539,7 +571,7 @@ function iconClassForKind(kind: NotificationItem["kind"]): string {
     case "reply":
     case "article_reply":
     default:
-      return "bg-muted text-foreground/80"
+      return "bg-base-2 text-foreground/80"
   }
 }
 

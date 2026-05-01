@@ -91,7 +91,7 @@ export function PollBlock({
         if (showResults) {
           return (
             <li key={opt.id}>
-              <div className="relative overflow-hidden rounded-md border border-border">
+              <div className="border-border relative overflow-hidden rounded-md border">
                 <div
                   className={`absolute inset-y-0 left-0 ${isViewerChoice ? "bg-primary/30" : "bg-muted"}`}
                   style={{ width: `${pct}%` }}
@@ -102,7 +102,7 @@ export function PollBlock({
                     {isViewerChoice && <span className="text-primary">✓</span>}
                     {opt.text}
                   </span>
-                  <span className="text-xs text-muted-foreground tabular-nums">
+                  <span className="text-muted-foreground text-xs tabular-nums">
                     {pct.toFixed(0)}%
                   </span>
                 </div>
@@ -113,7 +113,7 @@ export function PollBlock({
         return (
           <li key={opt.id}>
             <label
-              className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition hover:bg-muted/40 ${
+              className={`hover:bg-muted/40 flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition ${
                 isSelected ? "border-primary" : "border-border"
               }`}
             >
@@ -134,7 +134,7 @@ export function PollBlock({
   )
 
   return (
-    <div className="mt-2 rounded-md border border-border p-3">
+    <div className="border-border mt-2 rounded-md border p-3">
       {!showResults && !poll.allowMultiple ? (
         <RadioGroup
           value={[...selected][0] ?? ""}
@@ -146,7 +146,7 @@ export function PollBlock({
       ) : (
         optionsList
       )}
-      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+      <div className="text-muted-foreground mt-2 flex items-center justify-between text-xs">
         <span>
           {poll.totalVotes} {poll.totalVotes === 1 ? "vote" : "votes"} ·{" "}
           {formatTimeLeft(closesAt - now)}
@@ -156,13 +156,13 @@ export function PollBlock({
             type="button"
             onClick={submit}
             disabled={busy || selected.size === 0}
-            className="rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-full px-3 py-1 text-xs font-semibold transition disabled:opacity-50"
           >
             {busy ? "Voting…" : "Vote"}
           </button>
         )}
       </div>
-      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+      {error && <p className="text-destructive mt-1 text-xs">{error}</p>}
     </div>
   )
 }

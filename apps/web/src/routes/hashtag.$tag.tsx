@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { useCallback, useMemo } from "react"
+import { HashtagIcon } from "@heroicons/react/24/solid"
 import { api } from "../lib/api"
+import { qk } from "../lib/query-keys"
 import { usePageHeader } from "../components/app-page-header"
 import { Feed } from "../components/feed"
+import { PageEmpty } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
 import { APP_NAME } from "../lib/env"
 import { buildSeoMeta, canonicalLink } from "../lib/seo"
@@ -26,6 +29,7 @@ export const Route = createFileRoute("/hashtag/$tag")({
 
 function HashtagPage() {
   const { tag } = Route.useParams()
+  const feedKey = useMemo(() => qk.hashtag(tag), [tag])
   const load = useCallback((cursor?: string) => api.hashtag(tag, cursor), [tag])
 
   const appHeader = useMemo<AppPageHeaderSpec>(
@@ -33,10 +37,10 @@ function HashtagPage() {
       plainTitle: true,
       title: (
         <div className="flex w-full min-w-0 flex-col">
-          <h1 className="truncate text-base leading-tight font-semibold text-foreground">
+          <h1 className="text-foreground truncate text-base leading-tight font-semibold">
             #{tag}
           </h1>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             public posts with this hashtag
           </p>
         </div>
@@ -48,13 +52,17 @@ function HashtagPage() {
 
   return (
     <PageFrame>
-      <main>
-        <Feed
-          queryKey={["hashtag", tag]}
-          load={load}
-          emptyMessage={`Nothing tagged #${tag} yet.`}
-        />
-      </main>
+      <Feed
+        queryKey={feedKey}
+        load={load}
+        emptyState={
+          <PageEmpty
+            icon={<HashtagIcon />}
+            title={`Nothing tagged #${tag}`}
+            description="Be the first to post with this hashtag and start the conversation."
+          />
+        }
+      />
     </PageFrame>
   )
 }

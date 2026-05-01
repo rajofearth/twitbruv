@@ -69,7 +69,7 @@ export function Editor({
               className="min-h-[40vh] outline-none [&>*:first-child]:!mt-0"
               aria-placeholder={placeholder}
               placeholder={
-                <div className="pointer-events-none absolute top-4 left-4 leading-relaxed text-muted-foreground select-none">
+                <div className="text-muted-foreground pointer-events-none absolute top-4 left-4 leading-relaxed select-none">
                   {placeholder}
                 </div>
               }

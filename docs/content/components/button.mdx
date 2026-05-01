@@ -1,0 +1,40 @@
+---
+title: Button
+description: Triggers an action or event.
+order: 0
+props:
+  - name: variant
+    type: '"primary" | "outline" | "secondary" | "transparent" | "danger" | "danger-light"'
+    default: '"outline"'
+    description: Visual style of the button.
+  - name: size
+    type: '"sm" | "md"'
+    default: '"md"'
+    description: Size of the button.
+  - name: iconLeft
+    type: ReactNode
+    description: Icon element rendered before the label.
+  - name: iconRight
+    type: ReactNode
+    description: Icon element rendered after the label.
+  - name: loading
+    type: boolean
+    default: "false"
+    description: Show a loading spinner overlay.
+---
+
+<ComponentPreview src="button/default" />
+
+## Variants
+
+<ComponentPreview src="button/variants" />
+
+## Sizes
+
+<ComponentPreview src="button/sizes" />
+
+## With Icons
+
+<ComponentPreview src="button/icons" />
+
+<PropsTable />

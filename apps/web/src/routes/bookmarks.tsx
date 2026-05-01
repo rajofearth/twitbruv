@@ -1,9 +1,12 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo } from "react"
+import { BookmarkIcon } from "@heroicons/react/24/solid"
 import { api } from "../lib/api"
+import { qk } from "../lib/query-keys"
 import { authClient } from "../lib/auth"
 import { usePageHeader } from "../components/app-page-header"
 import { Feed } from "../components/feed"
+import { PageEmpty } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
 
 export const Route = createFileRoute("/bookmarks")({ component: Bookmarks })
@@ -27,13 +30,17 @@ function Bookmarks() {
 
   return (
     <PageFrame>
-      <main className="">
-        <Feed
-          queryKey={["bookmarks"]}
-          load={load}
-          emptyMessage="no bookmarks yet. tap the bookmark icon on a post to save it."
-        />
-      </main>
+      <Feed
+        queryKey={qk.bookmarks()}
+        load={load}
+        emptyState={
+          <PageEmpty
+            icon={<BookmarkIcon />}
+            title="No bookmarks yet"
+            description="Tap the bookmark icon on any post to save it for later. They'll all live here, only visible to you."
+          />
+        }
+      />
     </PageFrame>
   )
 }

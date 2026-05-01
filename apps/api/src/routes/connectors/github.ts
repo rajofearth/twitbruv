@@ -76,7 +76,7 @@ githubConnectorRoute.get('/callback', async (c) => {
 
   const settled = (params: Record<string, string>) => {
     const qs = new URLSearchParams(params).toString()
-    return c.redirect(`${ctx.env.PUBLIC_WEB_URL.replace(/\/$/, '')}/settings?${qs}`)
+    return c.redirect(`${ctx.env.PUBLIC_WEB_URL.replace(/\/$/, '')}/?${qs}`)
   }
 
   // Always clear the state cookie before exiting any branch — it's single-use.
@@ -85,30 +85,30 @@ githubConnectorRoute.get('/callback', async (c) => {
 
   if (errorParam) {
     cleanup()
-    return settled({ tab: 'connections', connect_error: errorParam })
+    return settled({ settings_tab: 'connections', connect_error: errorParam })
   }
   if (!session) {
     cleanup()
-    return settled({ tab: 'connections', connect_error: 'unauthorized' })
+    return settled({ settings_tab: 'connections', connect_error: 'unauthorized' })
   }
   if (!code || !stateParam) {
     cleanup()
-    return settled({ tab: 'connections', connect_error: 'missing_code' })
+    return settled({ settings_tab: 'connections', connect_error: 'missing_code' })
   }
 
   const cookie = await getSignedCookie(c, ctx.env.BETTER_AUTH_SECRET, STATE_COOKIE)
   cleanup()
   if (!cookie) {
-    return settled({ tab: 'connections', connect_error: 'state_expired' })
+    return settled({ settings_tab: 'connections', connect_error: 'state_expired' })
   }
   let parsed: { state: string; codeVerifier: string; userId: string }
   try {
     parsed = JSON.parse(cookie)
   } catch {
-    return settled({ tab: 'connections', connect_error: 'state_corrupt' })
+    return settled({ settings_tab: 'connections', connect_error: 'state_corrupt' })
   }
   if (parsed.state !== stateParam || parsed.userId !== session.user.id) {
-    return settled({ tab: 'connections', connect_error: 'state_mismatch' })
+    return settled({ settings_tab: 'connections', connect_error: 'state_mismatch' })
   }
 
   let exchange: { accessToken: string; scopes: Array<string> }
@@ -122,7 +122,10 @@ githubConnectorRoute.get('/callback', async (c) => {
     })
   } catch (err) {
     ctx.log.warn({ err: err instanceof Error ? err.message : err }, 'github_connect_exchange_failed')
-    return settled({ tab: 'connections', connect_error: 'exchange_failed' })
+    return settled({
+      settings_tab: 'connections',
+      connect_error: 'exchange_failed',
+    })
   }
 
   // Pull the GitHub identity now so we have providerAccountId + login to store on the row.
@@ -142,7 +145,10 @@ githubConnectorRoute.get('/callback', async (c) => {
     viewerLogin = u.login
   } catch (err) {
     ctx.log.warn({ err: err instanceof Error ? err.message : err }, 'github_connect_user_fetch_failed')
-    return settled({ tab: 'connections', connect_error: 'identity_failed' })
+    return settled({
+      settings_tab: 'connections',
+      connect_error: 'identity_failed',
+    })
   }
 
   const encrypted = encryptToken(exchange.accessToken)
@@ -176,7 +182,7 @@ githubConnectorRoute.get('/callback', async (c) => {
   await bustCache(ctx, session.user.id)
   await getGithubSnapshot(ctx, session.user.id, { forceRefresh: true }).catch(() => {})
 
-  return settled({ tab: 'connections', connected: 'github' })
+  return settled({ settings_tab: 'connections', connected: 'github' })
 })
 
 // What the settings page reads to render the current connection state.

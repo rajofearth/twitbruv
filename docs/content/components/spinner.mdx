@@ -1,0 +1,29 @@
+---
+title: Spinner
+description: An animated loading indicator. Uses a geometric SVG animation with a gooey blend effect.
+order: 6
+props:
+  - name: size
+    type: '"xs" | "sm" | "md" | "lg"'
+    default: '"md"'
+    description: Size preset. xs=12px, sm=16px, md=32px, lg=48px.
+  - name: autoplay
+    type: boolean
+    default: "true"
+    description: Start animating immediately.
+  - name: label
+    type: string
+    description: Optional text rendered below the spinner.
+---
+
+<ComponentPreview src="spinner/default" />
+
+## Sizes
+
+<ComponentPreview src="spinner/sizes" />
+
+## With Label
+
+<ComponentPreview src="spinner/with-label" />
+
+<PropsTable />

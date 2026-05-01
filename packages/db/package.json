@@ -10,17 +10,19 @@
   },
   "scripts": {
     "push": "drizzle-kit push",
+    "seed": "bun run --env-file=../../.env src/seed.ts",
     "studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1040.0",
     "drizzle-orm": "^0.45.2",
-    "postgres": "^3.4.5"
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
-    "@types/node": "^25.1.0",
+    "@types/node": "^25.6.0",
     "@workspace/config-tsconfig": "workspace:*",
     "drizzle-kit": "^0.31.10",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }

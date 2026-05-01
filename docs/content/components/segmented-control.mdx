@@ -1,0 +1,34 @@
+---
+title: Segmented Control
+description: A set of mutually exclusive options with a sliding indicator.
+order: 4
+props:
+  - name: options
+    type: "{ value: string, label?: string, icon?: ReactNode }[]"
+    description: Options to display as segments.
+  - name: value
+    type: string
+    description: Controlled selected value.
+  - name: defaultValue
+    type: string
+    description: Uncontrolled default selected value.
+  - name: onValueChange
+    type: "(value: string) => void"
+    description: Called when the selected segment changes.
+  - name: layout
+    type: '"fill" | "fit"'
+    default: '"fill"'
+    description: '"fill" divides space equally, "fit" sizes segments to content.'
+---
+
+<ComponentPreview src="segmented-control/default" />
+
+## With Icons
+
+<ComponentPreview src="segmented-control/icons" />
+
+## Fit Layout
+
+<ComponentPreview src="segmented-control/fit" />
+
+<PropsTable />

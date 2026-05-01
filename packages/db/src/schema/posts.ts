@@ -7,7 +7,6 @@ import {
   pgTable,
   primaryKey,
   serial,
-  smallint,
   text,
   timestamp,
   uuid,

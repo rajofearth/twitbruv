@@ -1,0 +1,30 @@
+---
+title: Card
+description: A container for grouped content. Uses compound dot-notation sub-components.
+order: 8
+props:
+  - name: variant
+    type: '"default" | "nested"'
+    default: '"default"'
+    description: Visual style. "nested" uses a subtler background for cards within cards.
+  - name: Card.Content
+    type: compound
+    description: Padded content area.
+  - name: Card.Header
+    type: compound
+    description: Header section with bottom border.
+  - name: Card.Body
+    type: compound
+    description: Main body section with padding.
+  - name: Card.Section
+    type: compound
+    description: A section with top border for visual separation.
+---
+
+<ComponentPreview src="card/default" />
+
+## With Header
+
+<ComponentPreview src="card/with-header" />
+
+<PropsTable />

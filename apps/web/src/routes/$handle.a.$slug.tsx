@@ -1,21 +1,27 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
-import { useEffect, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { Button } from "@workspace/ui/components/button"
 import { ApiError, api } from "../lib/api"
+import { qk } from "../lib/query-keys"
 import { Editor } from "../components/editor/editor"
+import { PageFrame } from "../components/page-frame"
 import { VerifiedBadge } from "../components/verified-badge"
 import { authClient } from "../lib/auth"
 import { APP_NAME } from "../lib/env"
 import { buildSeoMeta, canonicalLink, clipDescription } from "../lib/seo"
-import type { ArticleDto } from "../lib/api"
 
 export const Route = createFileRoute("/$handle/a/$slug")({
   component: ArticleView,
-  loader: async ({ params }) => {
+  loader: async ({ params, context }) => {
+    const ctx = context
     try {
       const { article } = await api.userArticleBySlug(
         params.handle,
         params.slug
+      )
+      ctx.queryClient.setQueryData(
+        qk.articles.userBySlug(params.handle, params.slug),
+        article
       )
       return { article }
     } catch {
@@ -83,30 +89,36 @@ export const Route = createFileRoute("/$handle/a/$slug")({
 function ArticleView() {
   const { handle, slug } = Route.useParams()
   const { data: session } = authClient.useSession()
-  const [article, setArticle] = useState<ArticleDto | null>(null)
-  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    setArticle(null)
-    setError(null)
-    api
-      .userArticleBySlug(handle, slug)
-      .then(({ article: next }) => setArticle(next))
-      .catch((e) => setError(e instanceof ApiError ? e.message : "not found"))
-  }, [handle, slug])
+  const {
+    data: article,
+    error,
+    isPending,
+  } = useQuery({
+    queryKey: qk.articles.userBySlug(handle, slug),
+    queryFn: async () => (await api.userArticleBySlug(handle, slug)).article,
+    retry: false,
+  })
 
-  if (error) {
+  const articleError =
+    error instanceof ApiError ? error.message : error ? "not found" : null
+
+  if (articleError) {
     return (
-      <main className="px-4 py-16 text-center">
-        <p className="text-sm text-muted-foreground">article not found</p>
-      </main>
+      <PageFrame>
+        <div className="px-4 py-16 text-center">
+          <p className="text-muted-foreground text-sm">article not found</p>
+        </div>
+      </PageFrame>
     )
   }
-  if (!article) {
+  if (isPending || !article) {
     return (
-      <main className="px-4 py-16">
-        <p className="text-sm text-muted-foreground">loading…</p>
-      </main>
+      <PageFrame>
+        <div className="px-4 py-16">
+          <p className="text-muted-foreground text-sm">loading…</p>
+        </div>
+      </PageFrame>
     )
   }
 
@@ -115,22 +127,22 @@ function ArticleView() {
   )
 
   return (
-    <main className="">
+    <PageFrame>
       {article.coverUrl && (
         <img
           src={article.coverUrl}
           alt=""
-          className="aspect-[3/1] w-full object-cover"
+          className="aspect-3/1 w-full object-cover"
         />
       )}
-      <header className="border-b border-border px-4 py-6">
+      <header className="border-border border-b px-4 py-6">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">
               {article.title}
             </h1>
             {article.subtitle && (
-              <p className="mt-2 text-base text-muted-foreground">
+              <p className="text-muted-foreground mt-2 text-base">
                 {article.subtitle}
               </p>
             )}
@@ -143,12 +155,12 @@ function ArticleView() {
             </Link>
           )}
         </div>
-        <div className="mt-4 flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="text-muted-foreground mt-4 flex items-center gap-3 text-xs">
           {article.author.handle && (
             <Link
               to="/$handle"
               params={{ handle: article.author.handle }}
-              className="flex items-center gap-1 font-medium text-foreground hover:underline"
+              className="text-foreground flex items-center gap-1 font-medium hover:underline"
             >
               {article.author.displayName || `@${article.author.handle}`}
               {article.author.isVerified && (
@@ -175,6 +187,6 @@ function ArticleView() {
         </div>
       </header>
       <Editor initialStateJson={article.bodyJson ?? null} readOnly />
-    </main>
+    </PageFrame>
   )
 }

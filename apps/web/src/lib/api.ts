@@ -2,8 +2,12 @@ import { getTrackingIds } from "@databuddy/sdk"
 import { API_URL, MAINTENANCE_MODE } from "./env"
 import { setRuntimeMaintenance } from "./maintenance"
 import type { GithubCard } from "@workspace/github-unfurl/card"
+import type { GenericUnfurlCard as GenericUnfurlPayload } from "@workspace/url-unfurl-core"
+import type { XStatusCard as XStatusPayload } from "@workspace/x-unfurl/card"
+import type { YouTubeCard } from "@workspace/youtube-unfurl/card"
 
 export type { GithubCard } from "@workspace/github-unfurl/card"
+export type { YouTubeCard } from "@workspace/youtube-unfurl/card"
 
 export class ApiError extends Error {
   constructor(
@@ -76,6 +80,10 @@ export const api = {
     request<UserListPage>(`/api/users/${h(handle)}/followers${qs(cursor)}`),
   following: (handle: string, cursor?: string) =>
     request<UserListPage>(`/api/users/${h(handle)}/following${qs(cursor)}`),
+  suggestedUsers: (limit?: number) =>
+    request<{ users: Array<PublicUser> }>(
+      `/api/users/suggested${limit ? `?limit=${limit}` : ""}`
+    ),
 
   follow: (handle: string) =>
     request<{ ok: true }>(`/api/users/${h(handle)}/follow`, { method: "POST" }),
@@ -598,6 +606,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ move }),
     }),
+
+  unfurlPreview: (url: string) =>
+    request<UnfurlPreview>(
+      `/api/unfurl/preview?url=${encodeURIComponent(url)}`
+    ),
 }
 
 export type ReportReason =
@@ -613,6 +626,44 @@ export interface PostEdit {
   id: string
   previousText: string
   editedAt: string
+}
+
+export interface PostArticleCard {
+  id: string
+  slug: string
+  title: string
+  subtitle: string | null
+  readingMinutes: number
+  publishedAt: string | null
+  authorHandle: string | null
+}
+
+export type ArticleUnfurlCard = PostArticleCard & {
+  provider: "article"
+  kind: "article"
+}
+
+export type GithubUnfurlCard = GithubCard & { provider: "github" }
+
+export type YoutubeUnfurlCard = YouTubeCard & { provider: "youtube" }
+
+export type GenericUnfurlCard = GenericUnfurlPayload & { provider: "generic" }
+
+export type XUnfurlCard = XStatusPayload & { provider: "x" }
+
+export type UnfurlCard =
+  | ArticleUnfurlCard
+  | GithubUnfurlCard
+  | YoutubeUnfurlCard
+  | GenericUnfurlCard
+  | XUnfurlCard
+
+export interface UnfurlPreview {
+  url: string
+  title: string
+  description: string | null
+  imageUrl: string | null
+  siteName: string | null
 }
 
 export interface Post {
@@ -652,10 +703,9 @@ export interface Post {
     reposted: boolean
   }
   media?: Array<PostMedia>
-  articleCard?: PostArticleCard
+  cards?: Array<UnfurlCard>
   /** Populated on repost rows: the original post to render with a "reposted by" banner. */
   repostOf?: Post
-  /** Populated on quote rows: the post being quoted, rendered as a bordered embed below the text. */
   quoteOf?: Post
   /** Populated on reply rows: the parent post this row is replying to, rendered as a small
    *  embed above the post so feed readers have conversation context. Not recursive. */
@@ -664,9 +714,6 @@ export interface Post {
   pinned?: boolean
   /** Optional poll attached to this post. */
   poll?: PollDto
-  /** Typed GitHub cards for any GitHub URLs in the post text. Populated async by the
-   *  worker; absent on freshly-created posts until the next refresh. */
-  githubCards?: Array<GithubCard>
 }
 
 export interface PollOption {
@@ -745,19 +792,10 @@ export interface UserListMember {
   addedAt: string
 }
 
-export interface PostArticleCard {
-  id: string
-  slug: string
-  title: string
-  subtitle: string | null
-  readingMinutes: number
-  publishedAt: string | null
-  authorHandle: string | null
-}
-
 export interface PostMedia {
   id: string
   kind: "image" | "video" | "gif"
+  mimeType?: string | null
   width: number | null
   height: number | null
   blurhash: string | null
@@ -1161,6 +1199,8 @@ export interface AdminPost {
   editedAt: string | null
   deletedAt: string | null
   createdAt: string
+  reportsOpen: number
+  reportsTotal: number
 }
 
 export interface AdminUser {
@@ -1177,6 +1217,11 @@ export interface AdminUser {
   isVerified: boolean
   deletedAt: string | null
   createdAt: string
+  postsCount: number
+  followersCount: number
+  followingCount: number
+  openReportsCount: number
+  reportsTotalCount?: number
 }
 
 export interface AdminUserDetail {
@@ -1223,6 +1268,10 @@ export interface AdminReport {
     displayName: string | null
     avatarUrl: string | null
   } | null
+  subjectPreview:
+    | { kind: "post"; authorHandle: string | null; textPreview: string }
+    | { kind: "user"; handle: string | null; displayName: string | null }
+    | { kind: "other"; subjectType: string }
 }
 
 export type AdminReportSubject =
@@ -1272,6 +1321,15 @@ export interface AdminReportDetail {
     avatarUrl: string | null
   } | null
   subject: AdminReportSubject | null
+  linkedModerationActions: Array<{
+    id: string
+    moderatorId: string | null
+    action: string
+    publicReason: string | null
+    privateNote: string | null
+    durationHours: number | null
+    createdAt: string
+  }>
 }
 
 export interface AnalyticsOverview {

@@ -1,46 +1,30 @@
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router"
-import { useEffect, useRef, useState } from "react"
-import {
-  AtIcon,
-  BookmarkIcon,
-  ChartBarIcon,
-  ChatCircleIcon,
-  HashIcon,
-  ImageIcon,
-  RepeatIcon,
-} from "@phosphor-icons/react"
-import { Textarea } from "@workspace/ui/components/textarea"
-import { cn } from "@workspace/ui/lib/utils"
-import {
-  LikeIconBurst,
-  useLikeAnimation,
-} from "../components/like-button-heart"
+import { useCallback, useEffect, useRef } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { ArrowLeftIcon } from "@heroicons/react/24/solid"
+import { Button } from "@workspace/ui/components/button"
 import { ApiError, api } from "../lib/api"
-import { useSubmitHotkey } from "../lib/hotkeys"
-import { Avatar } from "../components/avatar"
-import { RichText } from "../components/rich-text"
-import { MacfolioCardFromText } from "../components/macfolio-card"
-import { PollBlock } from "../components/poll-block"
-import {
-  ArticleCardBlock,
-  QuoteEmbed,
-  clickedInteractiveElement,
-} from "../components/post-card"
-import { GithubCardBlock } from "../components/github-card"
-import { PostMenu } from "../components/post-menu"
-import { EditPostDialog } from "../components/edit-post-dialog"
-import { ImageLightbox } from "../components/image-lightbox"
-import { useMe } from "../lib/me"
 import { APP_NAME } from "../lib/env"
+import { qk } from "../lib/query-keys"
 import { buildSeoMeta, canonicalLink, clipDescription } from "../lib/seo"
+import { Compose } from "../components/compose"
+import { FeedPostCard } from "../components/feed-post-card"
+import { PageError } from "../components/page-surface"
+import { PageFrame } from "../components/page-frame"
 import type { Post, Thread } from "../lib/api"
 
 export const Route = createFileRoute("/$handle/p/$id")({
   component: ThreadView,
-  loader: async ({ params }) => {
+  loader: async ({ params, context }) => {
+    const ctx = context
     try {
-      const { post } = await api.post(params.id)
-      return { post }
+      const postResult = await api.post(params.id)
+      ctx.queryClient.setQueryData(qk.post(params.id), postResult)
+      await ctx.queryClient.ensureQueryData({
+        queryKey: qk.thread(params.id),
+        queryFn: () => api.thread(params.id),
+      })
+      return { post: postResult.post }
     } catch {
       return { post: null }
     }
@@ -84,7 +68,7 @@ export const Route = createFileRoute("/$handle/p/$id")({
             articleBody: post.text,
             datePublished: post.createdAt,
             dateModified: post.editedAt ?? post.createdAt,
-            url: `${path}`,
+            url: path,
             author: post.author.handle
               ? {
                   "@type": "Person",
@@ -116,996 +100,161 @@ export const Route = createFileRoute("/$handle/p/$id")({
   },
 })
 
-function PostMediaGrid({
-  media,
-  className,
-}: {
-  media: NonNullable<Post["media"]>
-  className: string
-}) {
-  const gallery = media.flatMap((m) => {
-    if (m.processingState !== "ready") return []
-    const full =
-      m.variants.find((v) => v.kind === "large") ??
-      m.variants.find((v) => v.kind === "medium") ??
-      m.variants.find((v) => v.kind === "thumb") ??
-      m.variants[0]
-    return [{ id: m.id, src: full.url, alt: m.altText ?? "" }]
-  })
-  const galleryImages = gallery.map(({ src, alt }) => ({ src, alt }))
-  return (
-    <div className={className}>
-      {media.map((m) => {
-        const variant =
-          m.variants.find((v) => v.kind === "medium") ?? m.variants[0]
-        const isReady = m.processingState === "ready"
-        const galleryIndex = gallery.findIndex((g) => g.id === m.id)
-        return (
-          <div key={m.id} className="aspect-video bg-muted">
-            {isReady && (
-              <ImageLightbox
-                images={galleryImages}
-                initialIndex={galleryIndex >= 0 ? galleryIndex : 0}
-                disabled={galleryImages.length === 0}
-                className="block h-full w-full"
-              >
-                <img
-                  src={variant.url}
-                  alt={m.altText ?? ""}
-                  className="h-full w-full object-cover"
-                />
-              </ImageLightbox>
-            )}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 function ThreadView() {
   const { handle, id } = Route.useParams()
   const navigate = useNavigate()
-  const [thread, setThread] = useState<Thread | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const focalRef = useRef<HTMLDivElement>(null)
+  const didScrollRef = useRef(false)
+
+  const {
+    data: thread,
+    error: queryError,
+    isPending,
+    isError,
+  } = useQuery({
+    queryKey: qk.thread(id),
+    queryFn: () => api.thread(id),
+    retry: false,
+  })
+
+  const error = isError
+    ? queryError instanceof ApiError && queryError.status === 404
+      ? "Post not found"
+      : "Something went wrong"
+    : null
 
   useEffect(() => {
-    setThread(null)
-    setError(null)
-    api
-      .thread(id)
-      .then(setThread)
-      .catch((e) => setError(e instanceof ApiError ? e.message : "not found"))
+    didScrollRef.current = false
   }, [id])
 
-  function replace(next: Post) {
-    setThread((t) =>
-      t
-        ? {
-            ancestors: t.ancestors.map((p) => (p.id === next.id ? next : p)),
-            post: t.post && t.post.id === next.id ? next : t.post,
-            replies: t.replies.map((p) =>
-              p.id === next.id ? { ...p, ...next } : p
-            ),
-          }
-        : t
-    )
-  }
+  useEffect(() => {
+    if (!thread || didScrollRef.current) return
+    if (thread.ancestors.length === 0) return
+    didScrollRef.current = true
+    requestAnimationFrame(() => {
+      focalRef.current?.scrollIntoView({ block: "start" })
+    })
+  }, [thread])
 
-  function removeFromThread(removeId: string) {
-    setThread((t) =>
-      t
-        ? {
-            ancestors: t.ancestors.filter((p) => p.id !== removeId),
-            post: t.post && t.post.id === removeId ? null : t.post,
-            replies: t.replies.filter((p) => p.id !== removeId),
-          }
-        : t
-    )
-  }
-
-  function onReply(post: Post) {
-    setThread((t) =>
-      t
-        ? {
-            ...t,
-            post: t.post
-              ? {
-                  ...t.post,
-                  counts: {
-                    ...t.post.counts,
-                    replies: t.post.counts.replies + 1,
-                  },
-                }
-              : t.post,
-            replies: [...t.replies, { ...post, descendantReplyCount: 0 }],
-          }
-        : t
-    )
-  }
+  const onReply = useCallback(
+    (post: Post) => {
+      queryClient.setQueryData(qk.thread(id), (prev: Thread | undefined) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          post: prev.post
+            ? {
+                ...prev.post,
+                counts: {
+                  ...prev.post.counts,
+                  replies: prev.post.counts.replies + 1,
+                },
+              }
+            : prev.post,
+          replies: [...prev.replies, { ...post, descendantReplyCount: 0 }],
+        }
+      })
+    },
+    [queryClient, id]
+  )
 
   if (error) {
     return (
-      <main>
-        <div className="px-4 py-16 text-center">
-          <p className="text-sm text-muted-foreground">post not found</p>
+      <PageFrame>
+        <PageError message={error} className="px-4 py-16" />
+        <div className="px-4 text-center">
           <Link
             to="/$handle"
             params={{ handle }}
-            className="mt-3 inline-block text-xs text-primary hover:underline"
+            className="text-xs text-primary hover:underline"
           >
-            back to @{handle}
+            Back to @{handle}
           </Link>
         </div>
-      </main>
+      </PageFrame>
     )
   }
 
-  if (!thread) {
+  if (isPending || !thread) {
     return (
-      <main>
-        <div className="px-4 py-16">
-          <p className="text-sm text-muted-foreground">loading…</p>
+      <PageFrame>
+        <div className="px-4 py-16 text-center">
+          <p className="text-sm text-tertiary">Loading…</p>
         </div>
-      </main>
+      </PageFrame>
     )
   }
 
-  const hasAncestors = thread.ancestors.length > 0
+  const hasParents = thread.ancestors.length > 0
 
   return (
-    <main>
-      {hasAncestors && (
-        <div>
-          {thread.ancestors.map((p) => (
-            <AncestorPost
-              key={p.id}
-              post={p}
-              onChange={replace}
-              onRemove={() => removeFromThread(p.id)}
-              showLineBelow={true}
-            />
-          ))}
+    <PageFrame>
+      <header className="sticky top-0 z-40 flex h-12 items-center gap-3 bg-base-1/80 px-4 backdrop-blur-md">
+        <Button
+          variant="transparent"
+          size="sm"
+          iconLeft={<ArrowLeftIcon className="size-4" />}
+          onClick={() => navigate({ to: "/" })}
+          aria-label="Back"
+        />
+        <span className="text-sm font-semibold text-primary">Post</span>
+      </header>
+
+      {hasParents &&
+        thread.ancestors.map((p, i) => {
+          const isFirst = i === 0
+          const threadLine = isFirst ? "bottom" : "both"
+          return <FeedPostCard key={p.id} post={p} threadLine={threadLine} />
+        })}
+
+      {thread.post && (
+        <div ref={focalRef}>
+          <FeedPostCard
+            post={thread.post}
+            threadLine={hasParents ? "top" : undefined}
+            disableHover
+            truncateText={false}
+          />
         </div>
       )}
 
       {thread.post && (
-        <ParentPost
-          post={thread.post}
-          onChange={replace}
-          onRemove={() => navigate({ to: "/$handle", params: { handle } })}
-          hasAncestors={hasAncestors}
-        />
-      )}
-
-      <ReplyComposer postId={id} onReply={onReply} />
-
-      {thread.replies.length > 0 && (
         <div>
-          {thread.replies.map((p) => (
-            <div key={p.id}>
-              <ReplyRow
-                post={p}
-                onChange={replace}
-                onRemove={() => removeFromThread(p.id)}
-              />
-              {p.descendantReplyCount > 0 && p.author.handle && (
-                <Link
-                  to="/$handle/p/$id"
-                  params={{ handle: p.author.handle, id: p.id }}
-                  className="block border-b border-border bg-muted/10 px-4 py-2 pl-16 text-xs text-primary hover:underline"
-                >
-                  View {p.descendantReplyCount} more{" "}
-                  {p.descendantReplyCount === 1 ? "reply" : "replies"}
-                </Link>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </main>
-  )
-}
-
-function AncestorPost({
-  post,
-  onChange,
-  onRemove,
-  showLineBelow,
-}: {
-  post: Post
-  onChange: (p: Post) => void
-  onRemove: () => void
-  showLineBelow: boolean
-}) {
-  const [busy, setBusy] = useState(false)
-  const [editOpen, setEditOpen] = useState(false)
-  const authorHandle = post.author.handle
-  const initial = (post.author.displayName ?? authorHandle ?? "·")
-    .slice(0, 1)
-    .toUpperCase()
-
-  function relativeTime(iso: string): string {
-    const d = new Date(iso).getTime()
-    const diff = Date.now() - d
-    const s = Math.floor(diff / 1000)
-    if (s < 60) return `${s}s`
-    const m = Math.floor(s / 60)
-    if (m < 60) return `${m}m`
-    const h = Math.floor(m / 60)
-    if (h < 24) return `${h}h`
-    const dd = Math.floor(h / 24)
-    if (dd < 7) return `${dd}d`
-    return new Date(iso).toLocaleDateString()
-  }
-
-  async function optimistic(next: Partial<Post>, op: () => Promise<unknown>) {
-    const prev = post
-    onChange({ ...post, ...next })
-    setBusy(true)
-    try {
-      await op()
-    } catch {
-      onChange(prev)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const likeAnim = useLikeAnimation()
-  function toggleLike() {
-    if (busy || !post.viewer) return
-    const liked = !post.viewer.liked
-    likeAnim.trigger()
-    optimistic(
-      {
-        counts: { ...post.counts, likes: post.counts.likes + (liked ? 1 : -1) },
-        viewer: { ...post.viewer, liked },
-      },
-      () => (liked ? api.like(post.id) : api.unlike(post.id))
-    )
-  }
-
-  function toggleRepost() {
-    if (busy || !post.viewer) return
-    const reposted = !post.viewer.reposted
-    optimistic(
-      {
-        counts: {
-          ...post.counts,
-          reposts: post.counts.reposts + (reposted ? 1 : -1),
-        },
-        viewer: { ...post.viewer, reposted },
-      },
-      () => (reposted ? api.repost(post.id) : api.unrepost(post.id))
-    )
-  }
-
-  function toggleBookmark() {
-    if (busy || !post.viewer) return
-    const bookmarked = !post.viewer.bookmarked
-    optimistic(
-      {
-        counts: {
-          ...post.counts,
-          bookmarks: post.counts.bookmarks + (bookmarked ? 1 : -1),
-        },
-        viewer: { ...post.viewer, bookmarked },
-      },
-      () => (bookmarked ? api.bookmark(post.id) : api.unbookmark(post.id))
-    )
-  }
-
-  return (
-    <article className="relative px-4 py-3">
-      {showLineBelow && (
-        <div
-          className="absolute top-[42px] bottom-0 left-[26px] w-px bg-border"
-          aria-hidden="true"
-        />
-      )}
-
-      <div className="flex gap-2.5">
-        <div className="shrink-0">
-          {authorHandle ? (
-            <Link to="/$handle" params={{ handle: authorHandle }}>
-              <Avatar initial={initial} src={post.author.avatarUrl} size={20} />
-            </Link>
-          ) : (
-            <Avatar initial={initial} src={post.author.avatarUrl} size={20} />
-          )}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 text-xs">
-            {authorHandle ? (
-              <Link
-                to="/$handle"
-                params={{ handle: authorHandle }}
-                className="font-semibold hover:underline"
-              >
-                {post.author.displayName || `@${authorHandle}`}
-              </Link>
-            ) : (
-              <span className="font-semibold">
-                {post.author.displayName ?? "unknown"}
-              </span>
-            )}
-            {authorHandle && (
-              <span className="text-muted-foreground">@{authorHandle}</span>
-            )}
-            <span className="text-muted-foreground">·</span>
-            <span className="text-muted-foreground tabular-nums">
-              {relativeTime(post.createdAt)}
-            </span>
-            <PostMenu
-              post={post}
-              onChange={onChange}
-              onRemove={onRemove}
-              onStartEdit={() => setEditOpen(true)}
-              className="ml-auto"
-            />
-          </div>
-
-          <p className="mt-1 text-[13.5px] leading-[1.55] break-words whitespace-pre-wrap">
-            <RichText text={post.text} />
-          </p>
-
-          <MacfolioCardFromText text={post.text} />
-
-          {post.media && post.media.length > 0 && (
-            <PostMediaGrid
-              media={post.media}
-              className={`mt-2 grid gap-px overflow-hidden rounded-sm border border-border ${post.media.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}
-            />
-          )}
-
-          {post.articleCard && <ArticleCardBlock card={post.articleCard} />}
-
-          {post.githubCards?.map((card, i) => (
-            <GithubCardBlock
-              key={`${card.kind}-${card.url}-${i}`}
-              card={card}
-            />
-          ))}
-
-          {post.poll && (
-            <PollBlock
-              poll={post.poll}
-              onChange={(nextPoll) => onChange({ ...post, poll: nextPoll })}
-            />
-          )}
-
-          {post.quoteOf && <QuoteEmbed post={post.quoteOf} />}
-
-          <div className="mt-2.5 flex items-center gap-5 text-muted-foreground">
-            {authorHandle && (
-              <Link
-                to="/$handle/p/$id"
-                params={{ handle: authorHandle, id: post.id }}
-                className="flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums hover:text-foreground"
-              >
-                <ChatCircleIcon size={16} />
-                <span>{post.counts.replies}</span>
-              </Link>
-            )}
-            <button
-              type="button"
-              onClick={toggleRepost}
-              disabled={busy || !post.viewer}
-              className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-foreground ${post.viewer?.reposted ? "text-foreground" : ""}`}
-            >
-              <RepeatIcon size={16} />
-              <span>{post.counts.reposts}</span>
-            </button>
-            <button
-              type="button"
-              onClick={toggleLike}
-              disabled={busy || !post.viewer}
-              className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-foreground ${post.viewer?.liked ? "text-foreground" : ""}`}
-            >
-              <LikeIconBurst
-                liked={!!post.viewer?.liked}
-                animating={likeAnim.animating}
-                iconSize={16}
-              />
-              <span>{post.counts.likes}</span>
-            </button>
-            <button
-              type="button"
-              onClick={toggleBookmark}
-              disabled={busy || !post.viewer}
-              className={`flex items-center gap-1.5 py-0.5 transition-colors hover:text-foreground ${post.viewer?.bookmarked ? "text-foreground" : ""}`}
-            >
-              {post.viewer?.bookmarked ? (
-                <BookmarkIcon size={16} weight="fill" />
-              ) : (
-                <BookmarkIcon size={16} />
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-      <EditPostDialog
-        post={post}
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        onSaved={onChange}
-      />
-    </article>
-  )
-}
-
-function ParentPost({
-  post,
-  onChange,
-  onRemove,
-  hasAncestors,
-}: {
-  post: Post
-  onChange: (p: Post) => void
-  onRemove: () => void
-  hasAncestors?: boolean
-}) {
-  const [busy, setBusy] = useState(false)
-  const [editOpen, setEditOpen] = useState(false)
-  const authorHandle = post.author.handle
-  const initial = (post.author.displayName ?? authorHandle ?? "·")
-    .slice(0, 1)
-    .toUpperCase()
-
-  async function optimistic(next: Partial<Post>, op: () => Promise<unknown>) {
-    const prev = post
-    onChange({ ...post, ...next })
-    setBusy(true)
-    try {
-      await op()
-    } catch {
-      onChange(prev)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const likeAnim = useLikeAnimation()
-  function toggleLike() {
-    if (busy || !post.viewer) return
-    const liked = !post.viewer.liked
-    likeAnim.trigger()
-    optimistic(
-      {
-        counts: { ...post.counts, likes: post.counts.likes + (liked ? 1 : -1) },
-        viewer: { ...post.viewer, liked },
-      },
-      () => (liked ? api.like(post.id) : api.unlike(post.id))
-    )
-  }
-
-  function toggleRepost() {
-    if (busy || !post.viewer) return
-    const reposted = !post.viewer.reposted
-    optimistic(
-      {
-        counts: {
-          ...post.counts,
-          reposts: post.counts.reposts + (reposted ? 1 : -1),
-        },
-        viewer: { ...post.viewer, reposted },
-      },
-      () => (reposted ? api.repost(post.id) : api.unrepost(post.id))
-    )
-  }
-
-  function toggleBookmark() {
-    if (busy || !post.viewer) return
-    const bookmarked = !post.viewer.bookmarked
-    optimistic(
-      {
-        counts: {
-          ...post.counts,
-          bookmarks: post.counts.bookmarks + (bookmarked ? 1 : -1),
-        },
-        viewer: { ...post.viewer, bookmarked },
-      },
-      () => (bookmarked ? api.bookmark(post.id) : api.unbookmark(post.id))
-    )
-  }
-
-  return (
-    <article className="relative border-b border-border px-4 py-3.5">
-      {hasAncestors && (
-        <div
-          className="absolute top-0 left-[26px] h-3.5 w-px bg-border"
-          aria-hidden="true"
-        />
-      )}
-
-      <div className="flex items-center gap-2">
-        {authorHandle ? (
-          <Link to="/$handle" params={{ handle: authorHandle }}>
-            <Avatar initial={initial} src={post.author.avatarUrl} size={26} />
-          </Link>
-        ) : (
-          <Avatar initial={initial} src={post.author.avatarUrl} size={26} />
-        )}
-        <div className="min-w-0 flex-1">
-          {authorHandle ? (
-            <Link
-              to="/$handle"
-              params={{ handle: authorHandle }}
-              className="block hover:underline"
-            >
-              <span className="text-[13px] font-semibold">
-                {post.author.displayName || `@${authorHandle}`}
-              </span>
-            </Link>
-          ) : (
-            <span className="text-[13px] font-semibold">
-              {post.author.displayName ?? "unknown"}
-            </span>
-          )}
-          {authorHandle && (
-            <span className="block text-[11px] text-muted-foreground">
-              @{authorHandle}
-            </span>
-          )}
-        </div>
-        <PostMenu
-          post={post}
-          onChange={onChange}
-          onRemove={onRemove}
-          onStartEdit={() => setEditOpen(true)}
-        />
-      </div>
-
-      <p className="mt-2.5 text-[15.5px] leading-[1.5] break-words whitespace-pre-wrap">
-        <RichText text={post.text} />
-      </p>
-
-      <MacfolioCardFromText text={post.text} />
-
-      {post.media && post.media.length > 0 && (
-        <PostMediaGrid
-          media={post.media}
-          className={`mt-2.5 grid gap-px overflow-hidden rounded-sm border border-border ${post.media.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}
-        />
-      )}
-
-      {post.articleCard && <ArticleCardBlock card={post.articleCard} />}
-
-      {post.githubCards?.map((card, i) => (
-        <GithubCardBlock key={`${card.kind}-${card.url}-${i}`} card={card} />
-      ))}
-
-      {post.poll && (
-        <PollBlock
-          poll={post.poll}
-          onChange={(nextPoll) => onChange({ ...post, poll: nextPoll })}
-        />
-      )}
-
-      {post.quoteOf && <QuoteEmbed post={post.quoteOf} />}
-
-      {/* <div className="mt-2.5 flex items-center gap-3 text-[11px] tabular-nums text-muted-foreground">
-        {post.counts.reposts > 0 && <span>{post.counts.reposts} reposts</span>}
-        {post.counts.likes > 0 && <span>{post.counts.likes} likes</span>}
-        {post.counts.bookmarks > 0 && (
-          <span>{post.counts.bookmarks} bookmarks</span>
-        )}
-      </div> */}
-
-      <div className="mt-2.5 flex items-center gap-5 text-muted-foreground">
-        <button
-          type="button"
-          className="flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums hover:text-foreground"
-        >
-          <ChatCircleIcon size={16} />
-          <span>{post.counts.replies}</span>
-        </button>
-        <button
-          type="button"
-          onClick={toggleRepost}
-          disabled={busy || !post.viewer}
-          className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-foreground ${post.viewer?.reposted ? "text-foreground" : ""}`}
-        >
-          <RepeatIcon size={16} />
-          <span>{post.counts.reposts}</span>
-        </button>
-        <button
-          type="button"
-          onClick={toggleLike}
-          disabled={busy || !post.viewer}
-          className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-foreground ${post.viewer?.liked ? "text-foreground" : ""}`}
-        >
-          <LikeIconBurst
-            liked={!!post.viewer?.liked}
-            animating={likeAnim.animating}
-            iconSize={16}
-          />
-          <span>{post.counts.likes}</span>
-        </button>
-        <button
-          type="button"
-          onClick={toggleBookmark}
-          disabled={busy || !post.viewer}
-          className={`flex items-center gap-1.5 py-0.5 transition-colors hover:text-foreground ${post.viewer?.bookmarked ? "text-foreground" : ""}`}
-        >
-          {post.viewer?.bookmarked ? (
-            <BookmarkIcon size={16} weight="fill" />
-          ) : (
-            <BookmarkIcon size={16} />
-          )}
-        </button>
-      </div>
-      <EditPostDialog
-        post={post}
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        onSaved={onChange}
-      />
-    </article>
-  )
-}
-
-function ReplyComposer({
-  postId,
-  onReply,
-}: {
-  postId: string
-  onReply: (p: Post) => void
-}) {
-  const { me } = useMe()
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const [text, setText] = useState("")
-  const [expanded, setExpanded] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const avatarInitial = (me?.displayName ?? me?.handle ?? "·")
-    .slice(0, 1)
-    .toUpperCase()
-
-  const canSubmit = text.trim().length > 0 && !loading
-
-  async function submit() {
-    if (!canSubmit) return
-    setLoading(true)
-    try {
-      const { post } = await api.createPost({
-        text: text.trim(),
-        replyToId: postId,
-      })
-      setText("")
-      setExpanded(false)
-      onReply(post)
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useSubmitHotkey(submit, { enabled: canSubmit, target: textareaRef })
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    submit()
-  }
-
-  return (
-    <form
-      onSubmit={handleSubmit}
-      className="border-b border-border px-4 py-2.5"
-    >
-      <div className="flex gap-2.5">
-        <Avatar initial={avatarInitial} src={me?.avatarUrl} size={20} />
-        <div className="min-w-0 flex-1">
-          <Textarea
-            ref={textareaRef}
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value)
-              if (textareaRef.current) {
-                textareaRef.current.style.height = "auto"
-                textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
-              }
-            }}
-            onFocus={() => setExpanded(true)}
+          <Compose
+            replyToId={thread.post.id}
+            onCreated={onReply}
+            collapsible
             placeholder="Post your reply"
-            rows={1}
-            className="min-h-0 border-0 bg-transparent px-1 py-1 text-[13px] leading-relaxed md:text-[13px] dark:bg-transparent"
           />
+        </div>
+      )}
 
-          <div
-            className={`flex items-center justify-between overflow-hidden transition-all duration-200 ${
-              expanded ? "mt-2.5 max-h-10 opacity-100" : "max-h-0 opacity-0"
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                aria-label="add image"
-                className="flex size-[22px] items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      {thread.replies.map((reply) => (
+        <div key={reply.id}>
+          <FeedPostCard post={reply} />
+          {reply.descendantReplyCount > 0 && reply.author.handle && (
+            <div className="px-4 pb-2 pl-[68px]">
+              <Button
+                variant="transparent"
+                size="sm"
+                onClick={() =>
+                  navigate({
+                    to: "/$handle/p/$id",
+                    params: {
+                      handle: reply.author.handle!,
+                      id: reply.id,
+                    },
+                  })
+                }
               >
-                <ImageIcon size={13} />
-              </button>
-              <button
-                type="button"
-                aria-label="add poll"
-                className="flex size-[22px] items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <ChartBarIcon size={13} />
-              </button>
-              <button
-                type="button"
-                aria-label="add hashtag"
-                className="flex size-[22px] items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <HashIcon size={13} />
-              </button>
-              <button
-                type="button"
-                aria-label="mention someone"
-                className="flex size-[22px] items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <AtIcon size={13} />
-              </button>
-            </div>
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className="h-[22px] rounded-sm bg-foreground px-2.5 text-[11.5px] font-bold text-background transition-opacity disabled:opacity-50"
-            >
-              {loading ? "Replying…" : "Reply"}
-            </button>
-          </div>
-
-          {!expanded && (
-            <div className="mt-1 flex justify-end">
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                className="h-[22px] rounded-sm bg-foreground px-2.5 text-[11.5px] font-bold text-background transition-opacity disabled:opacity-50"
-              >
-                Reply
-              </button>
+                View {reply.descendantReplyCount} more{" "}
+                {reply.descendantReplyCount === 1 ? "reply" : "replies"}
+              </Button>
             </div>
           )}
         </div>
-      </div>
-    </form>
-  )
-}
-
-function ReplyRow({
-  post,
-  onChange,
-  onRemove,
-}: {
-  post: Post
-  onChange: (p: Post) => void
-  onRemove: () => void
-}) {
-  const navigate = useNavigate()
-  const authorHandle = post.author.handle
-  function openPost(e: React.MouseEvent) {
-    if (!authorHandle) return
-    if (clickedInteractiveElement(e.target)) return
-    if (typeof window !== "undefined") {
-      const sel = window.getSelection()
-      if (sel && sel.toString().length > 0) return
-    }
-    navigate({
-      to: "/$handle/p/$id",
-      params: { handle: authorHandle, id: post.id },
-    })
-  }
-  return (
-    // biome-ignore lint/a11y/useKeyWithClickEvents: row navigates on click; interactive children use clickedInteractiveElement to opt out
-    <div
-      onClick={openPost}
-      className={cn(
-        "block border-b border-border py-3 pr-4 pl-8 transition-colors",
-        authorHandle && "cursor-pointer hover:bg-muted/30"
-      )}
-    >
-      <ReplyCard post={post} onChange={onChange} onRemove={onRemove} />
-    </div>
-  )
-}
-
-function ReplyCard({
-  post,
-  onChange,
-  onRemove,
-}: {
-  post: Post
-  onChange: (p: Post) => void
-  onRemove: () => void
-}) {
-  const [busy, setBusy] = useState(false)
-  const [editOpen, setEditOpen] = useState(false)
-  const authorHandle = post.author.handle
-  const initial = (post.author.displayName ?? authorHandle ?? "·")
-    .slice(0, 1)
-    .toUpperCase()
-
-  async function optimistic(next: Partial<Post>, op: () => Promise<unknown>) {
-    const prev = post
-    onChange({ ...post, ...next })
-    setBusy(true)
-    try {
-      await op()
-    } catch {
-      onChange(prev)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const likeAnim = useLikeAnimation()
-  function toggleLike() {
-    if (busy || !post.viewer) return
-    const liked = !post.viewer.liked
-    likeAnim.trigger()
-    optimistic(
-      {
-        counts: { ...post.counts, likes: post.counts.likes + (liked ? 1 : -1) },
-        viewer: { ...post.viewer, liked },
-      },
-      () => (liked ? api.like(post.id) : api.unlike(post.id))
-    )
-  }
-
-  function toggleRepost() {
-    if (busy || !post.viewer) return
-    const reposted = !post.viewer.reposted
-    optimistic(
-      {
-        counts: {
-          ...post.counts,
-          reposts: post.counts.reposts + (reposted ? 1 : -1),
-        },
-        viewer: { ...post.viewer, reposted },
-      },
-      () => (reposted ? api.repost(post.id) : api.unrepost(post.id))
-    )
-  }
-
-  function relativeTime(iso: string): string {
-    const d = new Date(iso).getTime()
-    const diff = Date.now() - d
-    const s = Math.floor(diff / 1000)
-    if (s < 60) return `${s}s`
-    const m = Math.floor(s / 60)
-    if (m < 60) return `${m}m`
-    const h = Math.floor(m / 60)
-    if (h < 24) return `${h}h`
-    const dd = Math.floor(h / 24)
-    if (dd < 7) return `${dd}d`
-    return new Date(iso).toLocaleDateString()
-  }
-
-  return (
-    <>
-      <div className="flex items-center gap-2 text-xs">
-        {authorHandle ? (
-          <Link
-            to="/$handle"
-            params={{ handle: authorHandle }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Avatar initial={initial} src={post.author.avatarUrl} size={20} />
-          </Link>
-        ) : (
-          <Avatar initial={initial} src={post.author.avatarUrl} size={20} />
-        )}
-        {authorHandle ? (
-          <Link
-            to="/$handle"
-            params={{ handle: authorHandle }}
-            className="font-semibold hover:underline"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {post.author.displayName || `@${authorHandle}`}
-          </Link>
-        ) : (
-          <span className="font-semibold">
-            {post.author.displayName ?? "unknown"}
-          </span>
-        )}
-        {authorHandle && (
-          <span className="text-muted-foreground">@{authorHandle}</span>
-        )}
-        <span className="text-muted-foreground">·</span>
-        <span className="text-muted-foreground tabular-nums">
-          {relativeTime(post.createdAt)}
-        </span>
-        <PostMenu
-          post={post}
-          onChange={onChange}
-          onRemove={onRemove}
-          onStartEdit={() => setEditOpen(true)}
-          className="ml-auto"
-        />
-      </div>
-
-      <p className="mt-1.5 text-[13.5px] leading-[1.55] break-words whitespace-pre-wrap">
-        <RichText text={post.text} />
-      </p>
-
-      <MacfolioCardFromText text={post.text} />
-
-      {post.media && post.media.length > 0 && (
-        // biome-ignore lint/a11y/useKeyWithClickEvents: stops parent Link from intercepting interactions
-        <div onClick={(e) => e.stopPropagation()}>
-          <PostMediaGrid
-            media={post.media}
-            className={`mt-2 grid gap-px overflow-hidden rounded-sm border border-border ${post.media.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}
-          />
-        </div>
-      )}
-
-      {post.articleCard && <ArticleCardBlock card={post.articleCard} />}
-
-      {post.githubCards?.map((card, i) => (
-        <GithubCardBlock key={`${card.kind}-${card.url}-${i}`} card={card} />
       ))}
-
-      {post.poll && (
-        <PollBlock
-          poll={post.poll}
-          onChange={(nextPoll) => onChange({ ...post, poll: nextPoll })}
-        />
-      )}
-
-      {post.quoteOf && <QuoteEmbed post={post.quoteOf} />}
-
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: action bar wrapper */}
-      <div
-        className="mt-2.5 flex items-center gap-5 text-muted-foreground"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          type="button"
-          className="flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums hover:text-foreground"
-        >
-          <ChatCircleIcon size={16} />
-          <span>{post.counts.replies}</span>
-        </button>
-        <button
-          type="button"
-          onClick={toggleRepost}
-          disabled={busy || !post.viewer}
-          className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-foreground ${post.viewer?.reposted ? "text-foreground" : ""}`}
-        >
-          <RepeatIcon size={16} />
-          <span>{post.counts.reposts}</span>
-        </button>
-        <button
-          type="button"
-          onClick={toggleLike}
-          disabled={busy || !post.viewer}
-          className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-foreground ${post.viewer?.liked ? "text-foreground" : ""}`}
-        >
-          <LikeIconBurst
-            liked={!!post.viewer?.liked}
-            animating={likeAnim.animating}
-            iconSize={16}
-          />
-          <span>{post.counts.likes}</span>
-        </button>
-        <button
-          type="button"
-          className="flex items-center gap-1.5 py-0.5 transition-colors hover:text-foreground"
-        >
-          <BookmarkIcon size={16} />
-        </button>
-      </div>
-      <EditPostDialog
-        post={post}
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        onSaved={onChange}
-      />
-    </>
+    </PageFrame>
   )
 }

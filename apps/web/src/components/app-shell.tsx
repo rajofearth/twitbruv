@@ -1,85 +1,79 @@
-import { useLocation, useRouter } from "@tanstack/react-router"
+import { useRouter, useRouterState } from "@tanstack/react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
-  SidebarInset,
-  SidebarProvider,
-  useSidebar,
-} from "@workspace/ui/components/sidebar"
-import { TooltipProvider } from "@workspace/ui/components/tooltip"
-import {
-  Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  Dialog as DialogRoot,
   DialogTitle,
 } from "@workspace/ui/components/dialog"
 import { Button } from "@workspace/ui/components/button"
-import { useEffect } from "react"
-import { useIsMobile } from "@workspace/ui/hooks/use-mobile"
-import { cn } from "@workspace/ui/lib/utils"
 import { authClient } from "../lib/auth"
 import { api } from "../lib/api"
-import { useMobileKeyboardOpen } from "../hooks/use-mobile-keyboard-open"
-import { AppPageHeaderProvider } from "./app-page-header"
-import { AppHeader } from "./app-header"
+import { qk } from "../lib/query-keys"
 import { AppSidebar } from "./app-sidebar"
-import { MobileTabBar } from "./mobile-tab-bar"
-import { PublicShell } from "./public-shell"
-import { ComposeFab } from "./compose-fab"
+import { LightboxProvider } from "./lightbox-provider"
+import { YouTubePlayerProvider } from "./youtube-player-dialog"
+import { ComposeProvider, useCompose } from "./compose-provider"
+import { SettingsProvider } from "./settings/settings-provider"
 import type { ReactNode } from "react"
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { data: session, isPending } = authClient.useSession()
-  const location = useLocation()
-  const isInbox = location.pathname.startsWith("/inbox")
-  const isMobile = useIsMobile()
-  const keyboardOpen = useMobileKeyboardOpen()
+  const { data: session } = authClient.useSession()
+  const authed = Boolean(session)
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const isAdminShell = pathname.startsWith("/admin")
 
-  if (isPending || !session) return <PublicShell>{children}</PublicShell>
-
-  const showMobileTabBar = isMobile && !keyboardOpen
+  const sidebarLeftStyle = {
+    left: "max(0px, calc((100vw - 1080px) / 2))",
+  } as const
 
   return (
-    <TooltipProvider>
-      <ChessChallengePoller enabled={Boolean(session)} />
-      <AppPageHeaderProvider>
-        <SidebarProvider>
-          {!isMobile ? <AppSidebar enabled={Boolean(session)} /> : null}
+    <ComposeProvider>
+      <SettingsProvider>
+        <LightboxProvider>
+          <YouTubePlayerProvider>
+            {authed && <ChessChallengePoller enabled />}
 
-          <SidebarInset
-            className={cn(
-              showMobileTabBar &&
-                "pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:pb-0"
-            )}
-          >
-            <AppHeader />
-            <div className="@container/inset w-full min-w-0">
-              <main className="w-full min-w-0 border-border">{children}</main>
+            <div
+              className={
+                isAdminShell
+                  ? "fixed top-0 z-40 h-svh w-[68px]"
+                  : "fixed top-0 z-40 h-svh w-[68px] xl:w-[240px]"
+              }
+              style={sidebarLeftStyle}
+            >
+              <SidebarWithCompose compact={isAdminShell} />
             </div>
-            {!isInbox && (
-              <ComposeFab stackAboveMobileTabBar={showMobileTabBar} />
-            )}
-          </SidebarInset>
-          {isMobile ? <MobileTabBar enabled={Boolean(session)} /> : null}
-          <SidebarCloseOnNavigate />
-        </SidebarProvider>
-      </AppPageHeaderProvider>
-    </TooltipProvider>
+
+            <div className="mx-auto flex min-h-svh max-w-[1080px]">
+              <div
+                className={
+                  isAdminShell
+                    ? "w-[68px] shrink-0"
+                    : "w-[68px] shrink-0 xl:w-[240px]"
+                }
+              />
+              <main className="flex min-h-svh flex-1 flex-col">{children}</main>
+              <div
+                className={
+                  isAdminShell
+                    ? "hidden"
+                    : "hidden w-[68px] shrink-0 lg:block xl:w-[240px]"
+                }
+              />
+            </div>
+          </YouTubePlayerProvider>
+        </LightboxProvider>
+      </SettingsProvider>
+    </ComposeProvider>
   )
 }
 
-function SidebarCloseOnNavigate() {
-  const router = useRouter()
-  const { setOpenMobile } = useSidebar()
-
-  useEffect(() => {
-    return router.subscribe("onResolved", () => {
-      setOpenMobile(false)
-    })
-  }, [router, setOpenMobile])
-
-  return null
+function SidebarWithCompose({ compact }: { compact?: boolean }) {
+  const compose = useCompose()
+  return <AppSidebar compact={compact} onCompose={() => compose.open()} />
 }
 
 function ChessChallengePoller({ enabled }: { enabled: boolean }) {
@@ -87,7 +81,7 @@ function ChessChallengePoller({ enabled }: { enabled: boolean }) {
   const queryClient = useQueryClient()
 
   const { data } = useQuery({
-    queryKey: ["chess", "pending"],
+    queryKey: qk.chess.pending(),
     queryFn: () => api.chessPendingGames(),
     enabled,
     refetchInterval: 5000,
@@ -96,7 +90,7 @@ function ChessChallengePoller({ enabled }: { enabled: boolean }) {
   const acceptMutation = useMutation({
     mutationFn: (id: string) => api.chessAcceptGame(id),
     onSuccess: ({ game }) => {
-      queryClient.invalidateQueries({ queryKey: ["chess", "pending"] })
+      queryClient.invalidateQueries({ queryKey: qk.chess.pending() })
       router.navigate({ to: "/chess/$id", params: { id: game.id } })
     },
   })
@@ -104,14 +98,14 @@ function ChessChallengePoller({ enabled }: { enabled: boolean }) {
   const declineMutation = useMutation({
     mutationFn: (id: string) => api.chessDeclineGame(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["chess", "pending"] })
+      queryClient.invalidateQueries({ queryKey: qk.chess.pending() })
     },
   })
 
   const pendingGame = data?.games[0]
 
   return (
-    <Dialog open={!!pendingGame}>
+    <DialogRoot open={!!pendingGame}>
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>Chess Challenge!</DialogTitle>
@@ -138,6 +132,6 @@ function ChessChallengePoller({ enabled }: { enabled: boolean }) {
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </DialogRoot>
   )
 }

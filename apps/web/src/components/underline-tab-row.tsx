@@ -11,7 +11,7 @@ export function UnderlineTabRow({
 }) {
   return (
     <div
-      className={cn("flex w-full min-w-0 border-b border-border", className)}
+      className={cn("border-border flex w-full min-w-0 border-b", className)}
       role="tablist"
     >
       {children}

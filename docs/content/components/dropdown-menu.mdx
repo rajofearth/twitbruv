@@ -1,0 +1,59 @@
+---
+title: Dropdown Menu
+description: A popup menu triggered by a button. Built on Base UI Menu primitives.
+order: 3
+props:
+  - name: DropdownMenu.Root
+    type: compound
+    description: Manages open/close state and focus.
+  - name: open
+    type: boolean
+    description: Controlled open state.
+  - name: onOpenChange
+    type: "(open: boolean) => void"
+    description: Called when the menu opens or closes.
+  - name: modal
+    type: boolean
+    default: "true"
+    description: Whether the menu traps focus and locks scroll.
+  - name: DropdownMenu.Trigger
+    type: compound
+    description: The element that toggles the menu.
+  - name: DropdownMenu.Content
+    type: compound
+    description: The popup panel containing menu items.
+  - name: side
+    type: '"top" | "bottom" | "left" | "right"'
+    default: '"bottom"'
+    description: Side relative to the trigger.
+  - name: align
+    type: '"start" | "center" | "end"'
+    default: '"end"'
+    description: Alignment relative to the trigger.
+  - name: sideOffset
+    type: number
+    default: "4"
+    description: Offset from the trigger in pixels.
+  - name: DropdownMenu.Item
+    type: compound
+    description: A selectable menu option.
+  - name: variant
+    type: '"default" | "danger"'
+    default: '"default"'
+    description: Visual style of the item.
+  - name: icon
+    type: ReactNode
+    description: Icon rendered before the label.
+---
+
+<ComponentPreview src="dropdown-menu/default" />
+
+## With Groups
+
+<ComponentPreview src="dropdown-menu/with-groups" />
+
+## Danger Items
+
+<ComponentPreview src="dropdown-menu/danger" />
+
+<PropsTable />

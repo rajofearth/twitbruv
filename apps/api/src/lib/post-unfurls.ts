@@ -2,19 +2,47 @@ import { createHash } from 'node:crypto'
 import { inArray } from '@workspace/db'
 import { schema } from '@workspace/db'
 import type { Database } from '@workspace/db'
+import type { GithubRef } from '@workspace/github-unfurl'
 import {
   canonicalizeGithubUrl,
-  extractGithubRefs,
   fetchGithubCard,
   parseGithubUrl,
   persistCardOutcome,
-  persistFailureOnly,
-  type GithubRefWithUrl,
+  refKeyFor as refKeyForGithub,
 } from '@workspace/github-unfurl'
-import type PgBoss from 'pg-boss'
+import type { YouTubeRef } from '@workspace/youtube-unfurl'
+import {
+  canonicalizeYouTubeUrl,
+  fetchYouTubeCard,
+  parseYouTubeUrl,
+  persistYoutubeCardOutcome,
+  refKeyFor as refKeyForYoutube,
+} from '@workspace/youtube-unfurl'
+import type { XRef } from '@workspace/x-unfurl'
+import {
+  canonicalizeXUrl,
+  fetchXStatusCard,
+  parseXUrl,
+  persistXStatusCardOutcome,
+  refKeyFor as refKeyForX,
+} from '@workspace/x-unfurl'
+import {
+  canonicalGenericUrl,
+  fetchGenericCard,
+  persistFailureOnly,
+  persistGenericCardOutcome,
+  refKeyForGeneric,
+} from '@workspace/url-unfurl-core'
+import { URL_PATTERN, trimTrailingPunct } from '@workspace/url-unfurl-core/text'
+import type { AppJobQueues, UnfurlJobPayload } from './job-queues.ts'
 
-// Maps the parser's kind tag to the column value we persist on url_unfurls.kind.
-function unfurlKindFor(ref: GithubRefWithUrl): string {
+type CombinedUnfurl =
+  | { provider: 'github'; url: string; refKey: string; ref: GithubRef }
+  | { provider: 'youtube'; url: string; refKey: string; ref: YouTubeRef }
+  | { provider: 'x'; url: string; refKey: string; ref: XRef }
+  | { provider: 'generic'; url: string; refKey: string; canonicalUrl: string }
+
+function unfurlKindGithub(ref: GithubRef): string {
   switch (ref.kind) {
     case 'repo':
       return 'github_repo'
@@ -27,35 +55,105 @@ function unfurlKindFor(ref: GithubRefWithUrl): string {
   }
 }
 
+function unfurlKindYoutube(ref: YouTubeRef): string {
+  switch (ref.kind) {
+    case 'video':
+      return 'youtube_video'
+    case 'playlist':
+      return 'youtube_playlist'
+    case 'channel':
+      return 'youtube_channel'
+  }
+}
+
+function displayHostFromCanonical(canonical: string): string {
+  try {
+    return new URL(canonical).hostname.replace(/^www\./i, '')
+  } catch {
+    return 'Link'
+  }
+}
+
+function extractFirstCardableUrl(text: string): CombinedUnfurl | null {
+  for (const match of text.matchAll(URL_PATTERN)) {
+    const rawUrl = match[0]
+    const trimmed = trimTrailingPunct(rawUrl)
+    const gh = parseGithubUrl(rawUrl)
+    if (gh) {
+      return { provider: 'github', url: trimmed, refKey: refKeyForGithub(gh), ref: gh }
+    }
+    const yt = parseYouTubeUrl(rawUrl)
+    if (yt) {
+      return { provider: 'youtube', url: trimmed, refKey: refKeyForYoutube(yt), ref: yt }
+    }
+    const xr = parseXUrl(rawUrl)
+    if (xr) {
+      return { provider: 'x', url: trimmed, refKey: refKeyForX(xr), ref: xr }
+    }
+    const canon = canonicalGenericUrl(trimmed)
+    if (canon) {
+      return {
+        provider: 'generic',
+        url: trimmed,
+        refKey: refKeyForGeneric(canon),
+        canonicalUrl: canon,
+      }
+    }
+  }
+  return null
+}
+
+function extractPostUnfurls(text: string): Array<CombinedUnfurl> {
+  const first = extractFirstCardableUrl(text)
+  return first ? [first] : []
+}
+
 function hashUrl(url: string): string {
   return createHash('sha256').update(url).digest('hex')
 }
 
-interface AttachResult {
-  // refs newly persisted as pending — these need a worker job kicked off.
-  toEnqueue: Array<{ unfurlId: string; url: string; refKey: string }>
+function canonicalUrlFor(r: CombinedUnfurl): string {
+  if (r.provider === 'github') return canonicalizeGithubUrl(r.ref)
+  if (r.provider === 'youtube') return canonicalizeYouTubeUrl(r.ref)
+  if (r.provider === 'x') return canonicalizeXUrl(r.ref)
+  return r.canonicalUrl
 }
 
-/**
- * Idempotent: extract GitHub URLs from the text, ensure a `url_unfurls` row exists for each
- * (state='pending' if newly inserted), and link them to the post via `post_url_unfurls`.
- *
- * Caller is responsible for `boss.send` AFTER the surrounding transaction commits — we return
- * the enqueue payload list rather than calling boss.send here, so a tx rollback doesn't leave
- * orphaned jobs.
- *
- * Pass a `previousPostId` to clear stale links on edit; otherwise links are only added.
- */
+function kindFor(r: CombinedUnfurl): string {
+  if (r.provider === 'github') return unfurlKindGithub(r.ref)
+  if (r.provider === 'youtube') return unfurlKindYoutube(r.ref)
+  if (r.provider === 'x') return 'x_status'
+  return 'generic'
+}
+
+function siteLabel(r: CombinedUnfurl): string {
+  if (r.provider === 'github') return 'GitHub'
+  if (r.provider === 'youtube') return 'YouTube'
+  if (r.provider === 'x') return 'X'
+  return displayHostFromCanonical(r.canonicalUrl)
+}
+
+function providerLabel(r: CombinedUnfurl): string {
+  if (r.provider === 'github') return 'GitHub'
+  if (r.provider === 'youtube') return 'YouTube'
+  if (r.provider === 'x') return 'X'
+  return 'Web'
+}
+
+export type UnfurlJob = UnfurlJobPayload
+
+interface AttachResult {
+  toEnqueue: Array<UnfurlJob>
+}
+
 export async function attachPostUnfurls(opts: {
   tx: Database
   postId: string
   text: string
   resetExistingLinks?: boolean
 }): Promise<AttachResult> {
-  const refs = extractGithubRefs(opts.text)
+  const refs = extractPostUnfurls(opts.text)
   if (opts.resetExistingLinks) {
-    // Edit path: drop links to URLs that may no longer be in the new text. The url_unfurls
-    // rows themselves stay (they're shared across posters); just the per-post pivot is reset.
     await opts.tx
       .delete(schema.postUrlUnfurls)
       .where(inArray(schema.postUrlUnfurls.postId, [opts.postId]))
@@ -63,51 +161,50 @@ export async function attachPostUnfurls(opts: {
   if (refs.length === 0) return { toEnqueue: [] }
 
   const now = new Date()
-  const placeholderExpiry = new Date(now.getTime() + 24 * 60 * 60 * 1000) // 24h pending TTL
+  const placeholderExpiry = new Date(now.getTime() + 24 * 60 * 60 * 1000)
 
-  // Insert pending rows. onConflictDoNothing on refKey means callers who post a URL that
-  // someone else already posted just inherit the cached row.
   await opts.tx
     .insert(schema.urlUnfurls)
     .values(
       refs.map((r) => ({
-        url: canonicalizeGithubUrl(r),
-        urlHash: hashUrl(canonicalizeGithubUrl(r)),
+        url: canonicalUrlFor(r),
+        urlHash: hashUrl(canonicalUrlFor(r)),
         refKey: r.refKey,
-        kind: unfurlKindFor(r),
+        kind: kindFor(r),
         state: 'pending' as const,
-        siteName: 'GitHub',
-        providerName: 'GitHub',
+        siteName: siteLabel(r),
+        providerName: providerLabel(r),
         fetchedAt: now,
         expiresAt: placeholderExpiry,
       })),
     )
     .onConflictDoNothing({ target: schema.urlUnfurls.refKey })
 
-  // Now read all rows for our refKeys (the ones we just inserted + ones that already existed).
   const allRows = await opts.tx
     .select({
       id: schema.urlUnfurls.id,
       refKey: schema.urlUnfurls.refKey,
       state: schema.urlUnfurls.state,
       expiresAt: schema.urlUnfurls.expiresAt,
+      description: schema.urlUnfurls.description,
     })
     .from(schema.urlUnfurls)
     .where(inArray(schema.urlUnfurls.refKey, refs.map((r) => r.refKey)))
 
-  // Recover URLs that previously failed and whose cooldown has elapsed. Without this, the
-  // first poster who hit a transient 5xx / rate limit poisons the URL for everyone else
-  // until the failure TTL expires — and even then no one re-enqueues it. Flip those rows
-  // back to 'pending' so the enqueue loop below picks them up.
-  const staleFailureIds = allRows
-    .filter((r) => r.state === 'failed' && r.expiresAt.getTime() <= now.getTime())
+  const failedRecoveryIds = allRows
+    .filter((r) => {
+      if (r.state !== 'failed') return false
+      const expired = r.expiresAt.getTime() <= now.getTime()
+      const wasTokenMissing = r.description?.includes('unfurl_token_missing') ?? false
+      return expired || wasTokenMissing
+    })
     .map((r) => r.id)
-  if (staleFailureIds.length > 0) {
+  if (failedRecoveryIds.length > 0) {
     await opts.tx
       .update(schema.urlUnfurls)
       .set({ state: 'pending', fetchedAt: now, expiresAt: placeholderExpiry })
-      .where(inArray(schema.urlUnfurls.id, staleFailureIds))
-    const reset = new Set(staleFailureIds)
+      .where(inArray(schema.urlUnfurls.id, failedRecoveryIds))
+    const reset = new Set(failedRecoveryIds)
     for (const r of allRows) {
       if (reset.has(r.id)) r.state = 'pending'
     }
@@ -115,8 +212,6 @@ export async function attachPostUnfurls(opts: {
 
   const byRefKey = new Map(allRows.map((r) => [r.refKey!, r]))
 
-  // Pivot: link the post to each unfurl, in appearance order. onConflictDoNothing handles
-  // re-insert on edit if the same URL was already linked.
   const pivotValues = refs
     .map((r, position) => {
       const row = byRefKey.get(r.refKey)
@@ -126,74 +221,130 @@ export async function attachPostUnfurls(opts: {
     .filter((v): v is NonNullable<typeof v> => v !== null)
 
   if (pivotValues.length > 0) {
-    await opts.tx
-      .insert(schema.postUrlUnfurls)
-      .values(pivotValues)
-      .onConflictDoNothing()
+    await opts.tx.insert(schema.postUrlUnfurls).values(pivotValues).onConflictDoNothing()
   }
 
-  // Enqueue jobs only for refs that landed in 'pending' state — already-cached cards
-  // (state='ready' or 'failed' with future expiry) don't need a re-fetch.
-  const toEnqueue: AttachResult['toEnqueue'] = []
+  const toEnqueue: Array<UnfurlJob> = []
   for (const r of refs) {
     const row = byRefKey.get(r.refKey)
     if (!row) continue
     if (row.state === 'pending') {
-      toEnqueue.push({ unfurlId: row.id, url: r.url, refKey: r.refKey })
+      toEnqueue.push({
+        unfurlId: row.id,
+        url: r.url,
+        refKey: r.refKey,
+        provider: r.provider,
+      })
     }
   }
   return { toEnqueue }
 }
 
-/** Fire-and-forget enqueue. Call AFTER the surrounding transaction commits. */
 export async function dispatchUnfurlJobs(
-  boss: PgBoss,
-  jobs: Array<{ unfurlId: string; url: string; refKey: string }>,
+  jobQueues: AppJobQueues,
+  jobs: Array<UnfurlJob>,
 ): Promise<void> {
   if (jobs.length === 0) return
-  // Send in parallel; boss.send is idempotent enough that a transient error on one doesn't
-  // poison the others. Failures bubble up only as a console error.
   await Promise.all(
-    jobs.map((j) =>
-      boss.send('github.unfurl', j).catch((err) => {
-        console.warn('[github-unfurl] enqueue failed', { err: (err as Error).message, refKey: j.refKey })
-      }),
-    ),
+    jobs.map((j) => {
+      const queue =
+        j.provider === 'youtube'
+          ? 'youtube.unfurl'
+          : j.provider === 'generic'
+            ? 'generic.unfurl'
+            : j.provider === 'x'
+              ? 'x.unfurl'
+              : 'github.unfurl'
+      return jobQueues.enqueueUnfurl(j).catch((err) => {
+        console.warn('[unfurl] enqueue failed', {
+          err: (err as Error).message,
+          refKey: j.refKey,
+          queue,
+        })
+      })
+    }),
   )
 }
 
 const INLINE_FETCH_TIMEOUT_MS = 3000
 
-/**
- * Fetch GitHub cards inline so a freshly-created post can include them in the create
- * response — no second roundtrip needed for the user to see the card. Each ref races
- * against a short timeout; on timeout (slow GitHub, big PR with thousands of files) we
- * fall back to enqueueing the worker so the card still arrives on next refresh.
- *
- * Call AFTER the surrounding transaction commits.
- */
 export async function runInlineUnfurls(
   db: Database,
-  boss: PgBoss,
-  jobs: Array<{ unfurlId: string; url: string; refKey: string }>,
+  jobQueues: AppJobQueues,
+  jobs: Array<UnfurlJob>,
+  opts?: { youtubeApiKey?: string; fxtwitterApiBaseUrl?: string },
 ): Promise<void> {
   if (jobs.length === 0) return
   await Promise.all(
     jobs.map(async (j) => {
-      const ref = parseGithubUrl(j.url)
-      if (!ref) {
-        await persistFailureOnly(db, j.unfurlId, 'unknown', 'parse_failed').catch(() => {})
-        return
-      }
       let timeoutId: ReturnType<typeof setTimeout> | undefined
       const timeout = new Promise<'timeout'>((resolve) => {
         timeoutId = setTimeout(() => resolve('timeout'), INLINE_FETCH_TIMEOUT_MS)
       })
       try {
+        if (j.provider === 'generic') {
+          const result = await Promise.race([fetchGenericCard(j.url), timeout])
+          if (result === 'timeout') {
+            await jobQueues.enqueueUnfurl(j).catch((err) => {
+              console.warn('[generic-unfurl] fallback enqueue failed', {
+                err: (err as Error).message,
+                refKey: j.refKey,
+              })
+            })
+            return
+          }
+          await persistGenericCardOutcome(db, j.unfurlId, result)
+          return
+        }
+        if (j.provider === 'youtube') {
+          const yref = parseYouTubeUrl(j.url)
+          if (!yref) {
+            await persistFailureOnly(db, j.unfurlId, 'unknown', 'parse_failed').catch(() => {})
+            return
+          }
+          const result = await Promise.race([fetchYouTubeCard(yref, opts?.youtubeApiKey), timeout])
+          if (result === 'timeout') {
+            await jobQueues.enqueueUnfurl(j).catch((err) => {
+              console.warn('[youtube-unfurl] fallback enqueue failed', {
+                err: (err as Error).message,
+                refKey: j.refKey,
+              })
+            })
+            return
+          }
+          await persistYoutubeCardOutcome(db, j.unfurlId, result)
+          return
+        }
+        if (j.provider === 'x') {
+          const xref = parseXUrl(j.url)
+          if (!xref) {
+            await persistFailureOnly(db, j.unfurlId, 'unknown', 'parse_failed').catch(() => {})
+            return
+          }
+          const result = await Promise.race([
+            fetchXStatusCard(xref, { baseUrl: opts?.fxtwitterApiBaseUrl }),
+            timeout,
+          ])
+          if (result === 'timeout') {
+            await jobQueues.enqueueUnfurl(j).catch((err) => {
+              console.warn('[x-unfurl] fallback enqueue failed', {
+                err: (err as Error).message,
+                refKey: j.refKey,
+              })
+            })
+            return
+          }
+          await persistXStatusCardOutcome(db, j.unfurlId, result)
+          return
+        }
+        const ref = parseGithubUrl(j.url)
+        if (!ref) {
+          await persistFailureOnly(db, j.unfurlId, 'unknown', 'parse_failed').catch(() => {})
+          return
+        }
         const result = await Promise.race([fetchGithubCard(ref), timeout])
         if (result === 'timeout') {
-          // Hand off to the worker so the card still appears on next refresh.
-          await boss.send('github.unfurl', j).catch((err) => {
+          await jobQueues.enqueueUnfurl(j).catch((err) => {
             console.warn('[github-unfurl] fallback enqueue failed', {
               err: (err as Error).message,
               refKey: j.refKey,
@@ -203,9 +354,6 @@ export async function runInlineUnfurls(
         }
         await persistCardOutcome(db, j.unfurlId, ref, result)
       } catch (err) {
-        // Defensive: fetchGithubCard already wraps errors into a FetchOutcome, so a throw
-        // here is a programmer bug, not a network failure. Persist as unknown so the row
-        // doesn't loop in pending.
         await persistFailureOnly(db, j.unfurlId, 'unknown', (err as Error).message).catch(() => {})
       } finally {
         if (timeoutId) clearTimeout(timeoutId)

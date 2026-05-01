@@ -1,0 +1,71 @@
+---
+title: Link Card
+description: Rich link previews shown when URLs are shared in posts. Supports generic OG cards, GitHub repos, YouTube videos, and X/Twitter posts.
+order: 7
+props:
+  - name: url
+    type: string
+    description: The URL being previewed.
+  - name: title
+    type: string
+    description: Page title from OG metadata.
+  - name: description
+    type: string
+    description: Page description from OG metadata.
+  - name: imageUrl
+    type: string
+    description: OG image URL. Rendered at 1200x630 aspect ratio.
+  - name: siteName
+    type: string
+    description: Site name or hostname.
+---
+
+Link cards appear automatically when a post contains a URL. The system detects the URL provider and renders a rich preview card tailored to the content type.
+
+## Generic Link
+
+The default card for any URL. Fetches OG metadata and renders an image, title, description, and site name.
+
+<ComponentPreview src="link-card/with-image" />
+
+When no OG image is available, the card renders a compact text-only layout.
+
+<ComponentPreview src="link-card/no-image" />
+
+## GitHub Repository
+
+GitHub URLs render a specialized card with the repo header, description, topics, primary language, stars, and forks.
+
+<ComponentPreview src="link-card/github-repo" />
+
+## GitHub Issue
+
+Issues show the state badge (open/closed), title, excerpt, labels, and metadata.
+
+<ComponentPreview src="link-card/github-issue" />
+
+## GitHub Pull Request
+
+Pull requests display the state (open/closed/merged/draft), branch refs, diff stats, and file count.
+
+<ComponentPreview src="link-card/github-pull" />
+
+## GitHub Commit
+
+Commits show the short SHA, message headline, body, author, and diff stats.
+
+<ComponentPreview src="link-card/github-commit" />
+
+## YouTube Video
+
+YouTube links show a video thumbnail with a play button overlay, duration badge, channel name, and view/like/comment counts.
+
+<ComponentPreview src="link-card/youtube-video" />
+
+## X (Twitter) Post
+
+X/Twitter status links render the full post content with the author's avatar, name, verified badge, timestamp, and engagement stats.
+
+<ComponentPreview src="link-card/x-status" />
+
+<PropsTable />

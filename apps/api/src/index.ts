@@ -28,6 +28,8 @@ import { scheduledPostsRoute } from './routes/scheduled-posts.ts'
 import { listsRoute } from './routes/lists.ts'
 import { githubConnectorRoute } from './routes/connectors/github.ts'
 import { chessRoute } from './routes/chess.ts'
+import { unfurlRoute } from './routes/unfurl.ts'
+import { devRoute } from './routes/dev.ts'
 
 const ctx = await buildContext()
 const app = new Hono<HonoEnv>()
@@ -116,6 +118,13 @@ function errMsg(err: unknown): string {
 // delegating to better-auth — it doesn't enforce any.
 app.on(['POST', 'GET'], '/api/auth/*', async (c) => {
   const path = c.req.path
+  if (c.req.method === 'GET') {
+    if (path.endsWith('/passkey/generate-authenticate-options')) {
+      await ctx.rateLimit(c, 'auth.passkey-authenticate')
+    } else if (path.endsWith('/passkey/generate-register-options')) {
+      await ctx.rateLimit(c, 'auth.passkey-register')
+    }
+  }
   if (c.req.method === 'POST') {
     if (path.endsWith('/sign-up/email')) await ctx.rateLimit(c, 'auth.signup')
     else if (path.endsWith('/sign-in/email')) await ctx.rateLimit(c, 'auth.signin')
@@ -130,6 +139,16 @@ app.on(['POST', 'GET'], '/api/auth/*', async (c) => {
     else if (path.endsWith('/two-factor/send-otp')) await ctx.rateLimit(c, 'auth.email-verify-resend')
     else if (path.endsWith('/send-verification-email')) await ctx.rateLimit(c, 'auth.email-verify-resend')
     else if (path.endsWith('/change-email')) await ctx.rateLimit(c, 'auth.email-verify-resend')
+    else if (path.endsWith('/passkey/verify-authentication')) {
+      await ctx.rateLimit(c, 'auth.passkey-authenticate')
+    } else if (path.endsWith('/passkey/verify-registration')) {
+      await ctx.rateLimit(c, 'auth.passkey-register')
+    } else if (
+      path.endsWith('/passkey/delete-passkey') ||
+      path.endsWith('/passkey/update-passkey')
+    ) {
+      await ctx.rateLimit(c, 'auth.passkey-manage')
+    }
   }
   if (path.includes('/callback/')) await ctx.rateLimit(c, 'auth.oauth-callback')
   return ctx.auth.handler(c.req.raw)
@@ -168,7 +187,10 @@ app.route('/api/posts', postsRoute)
 app.route('/api/feed', feedRoute)
 app.route('/api/hashtags', hashtagsRoute)
 app.route('/api/search', searchRoute)
-app.route('/api/media', createMediaRoute({ s3: ctx.s3, mediaEnv: ctx.mediaEnv, boss: ctx.boss }))
+app.route(
+  '/api/media',
+  createMediaRoute({ s3: ctx.s3, mediaEnv: ctx.mediaEnv, jobQueues: ctx.jobQueues }),
+)
 
 // Signing proxy: takes a stored object key on the path, mints a short-lived signed URL, and
 // 302s the browser to it. We cache the redirect for a few minutes so repeated `<img>` paints
@@ -221,6 +243,8 @@ app.route('/api/scheduled-posts', scheduledPostsRoute)
 app.route('/api/lists', listsRoute)
 app.route('/api/connectors/github', githubConnectorRoute)
 app.route('/api/chess', chessRoute)
+app.route('/api/unfurl', unfurlRoute)
+app.route('/api/dev', devRoute)
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404))
 app.onError((err, c) => {

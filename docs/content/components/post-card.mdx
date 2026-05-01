@@ -1,0 +1,38 @@
+---
+title: PostCard
+description: Displays a single post with author, text, and action bar. 
+order: 1
+props:
+  - name: author
+    type: "{ handle: string; displayName: string; avatarUrl: string | null }"
+    description: Post author info.
+  - name: text
+    type: string
+    description: Post body text.
+  - name: time
+    type: string
+    description: Relative timestamp string.
+  - name: likes
+    type: number
+    description: Like count.
+  - name: replies
+    type: number
+    description: Reply count.
+  - name: reposts
+    type: number
+    description: Repost count.
+  - name: liked
+    type: boolean
+    description: Whether the current user has liked the post.
+  - name: threadLine
+    type: '"top" | "bottom" | "both"'
+    description: Show a connecting line for thread context.
+---
+
+<ComponentPreview src="post-card/default" />
+
+## Thread
+
+<ComponentPreview src="post-card/thread" />
+
+<PropsTable />

@@ -1,0 +1,24 @@
+---
+title: Avatar
+description: Displays a user avatar image or initial fallback.
+order: 2
+props:
+  - name: initial
+    type: string
+    description: Fallback character(s) when no image is provided.
+  - name: src
+    type: string | null
+    description: Image URL.
+  - name: size
+    type: '"xs" | "sm" | "md" | "lg" | "xl"'
+    default: '"md"'
+    description: Size variant.
+---
+
+<ComponentPreview src="avatar/default" />
+
+## Sizes
+
+<ComponentPreview src="avatar/sizes" />
+
+<PropsTable />

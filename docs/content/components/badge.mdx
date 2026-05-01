@@ -1,0 +1,27 @@
+---
+title: Badge
+description: A small status indicator label. Supports semantic variants and custom hex colors with automatic foreground/background calculation.
+order: 7
+props:
+  - name: variant
+    type: '"neutral" | "danger" | "warning" | "success" | "merged"'
+    default: '"neutral"'
+    description: Semantic color variant.
+  - name: color
+    type: string
+    description: Hex color (e.g. "#d73a4a"). Overrides variant. Background and foreground are computed automatically for readability.
+---
+
+<ComponentPreview src="badge/default" />
+
+## Variants
+
+<ComponentPreview src="badge/variants" />
+
+## Custom Color
+
+Pass a `color` prop with any hex value. The badge computes a tinted background and adjusts the foreground color for readability. Used for dynamic data like GitHub issue labels.
+
+<ComponentPreview src="badge/custom-color" />
+
+<PropsTable />

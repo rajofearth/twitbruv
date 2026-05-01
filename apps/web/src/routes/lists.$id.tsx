@@ -1,51 +1,67 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router"
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { LockIcon, TrashIcon, XIcon } from "@phosphor-icons/react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useCallback, useDeferredValue, useMemo, useState } from "react"
+import {
+  ListBulletIcon,
+  LockClosedIcon,
+  PencilSquareIcon,
+  TrashIcon,
+  UserPlusIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/solid"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
+import { Avatar } from "@workspace/ui/components/avatar"
 import { ApiError, api } from "../lib/api"
 import { authClient } from "../lib/auth"
+import { qk } from "../lib/query-keys"
 import { usePageHeader } from "../components/app-page-header"
-import { Avatar } from "../components/avatar"
 import { Feed } from "../components/feed"
 import { PageEmpty, PageError, PageLoading } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
-import type { PublicUser, UserList, UserListMember } from "../lib/api"
+import type { PublicUser, UserListMember } from "../lib/api"
 
 export const Route = createFileRoute("/lists/$id")({ component: ListDetail })
 
 function ListDetail() {
   const { id } = Route.useParams()
+  const qc = useQueryClient()
   const { data: session } = authClient.useSession()
   const router = useRouter()
 
-  const [list, setList] = useState<UserList | null>(null)
-  const [members, setMembers] = useState<Array<UserListMember>>([])
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [opError, setOpError] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+
+  const listQuery = useQuery({
+    queryKey: qk.lists.detail(id),
+    queryFn: async () => (await api.list(id)).list,
+  })
+  const membersQuery = useQuery({
+    queryKey: qk.lists.members(id),
+    queryFn: async () => (await api.listMembers(id)).members,
+  })
+
+  const list = listQuery.data ?? null
+  const members = membersQuery.data ?? []
+  const loading = listQuery.isPending || membersQuery.isPending
+  const fetchErr = listQuery.error ?? membersQuery.error
+  const error =
+    fetchErr instanceof ApiError
+      ? fetchErr.message
+      : fetchErr
+        ? "load failed"
+        : null
 
   const isOwner = Boolean(session && list && session.user.id === list.ownerId)
 
   async function refresh() {
-    setError(null)
-    try {
-      const [listRes, memRes] = await Promise.all([
-        api.list(id),
-        api.listMembers(id),
-      ])
-      setList(listRes.list)
-      setMembers(memRes.members)
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "load failed")
-    } finally {
-      setLoading(false)
-    }
+    setOpError(null)
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: qk.lists.detail(id) }),
+      qc.invalidateQueries({ queryKey: qk.lists.members(id) }),
+    ])
   }
-  useEffect(() => {
-    void refresh()
-  }, [id])
 
   const load = useCallback(
     (cursor?: string) => api.listTimeline(id, cursor),
@@ -56,11 +72,12 @@ function ListDetail() {
     if (!confirm("Delete this list?")) return
     try {
       await api.deleteList(id)
+      await qc.invalidateQueries({ queryKey: qk.lists.mine() })
       router.navigate({ to: "/lists" })
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "delete failed")
+      setOpError(e instanceof ApiError ? e.message : "delete failed")
     }
-  }, [id, router])
+  }, [id, router, qc])
 
   const appHeader = useMemo(() => {
     if (loading || !list) return null
@@ -70,8 +87,8 @@ function ListDetail() {
         <span className="inline-flex min-w-0 items-center gap-2">
           <span className="truncate">{list.title}</span>
           {list.isPrivate ? (
-            <span className="inline-flex shrink-0 items-center gap-0.5 text-xs font-normal text-muted-foreground">
-              <LockIcon size={12} />
+            <span className="inline-flex shrink-0 items-center gap-0.5 text-xs font-normal text-tertiary">
+              <LockClosedIcon className="size-3" />
               Private
             </span>
           ) : null}
@@ -81,18 +98,18 @@ function ListDetail() {
         <div className="flex shrink-0 items-center gap-1">
           <Button
             size="sm"
-            variant="ghost"
+            variant="transparent"
             onClick={() => setShowAdd((v) => !v)}
           >
             {showAdd ? "Done" : "Manage"}
           </Button>
           <Button
             size="sm"
-            variant="ghost"
+            variant="transparent"
             onClick={removeList}
             className="text-destructive"
           >
-            <TrashIcon size={14} /> Delete
+            <TrashIcon className="size-3.5" /> Delete
           </Button>
         </div>
       ) : undefined,
@@ -104,50 +121,66 @@ function ListDetail() {
   if (loading) {
     return (
       <PageFrame>
-        <main>
-          <PageLoading />
-        </main>
+        <PageLoading />
       </PageFrame>
     )
   }
   if (!list) {
     return (
       <PageFrame>
-        <main>
-          {error ? (
-            <PageError message={error} />
-          ) : (
-            <PageEmpty
-              title="List not found"
-              description="It may have been deleted or you may not have access."
-            />
-          )}
-        </main>
+        {error ? (
+          <PageError message={error} />
+        ) : (
+          <PageEmpty
+            icon={<ListBulletIcon />}
+            title="List not found"
+            description="It may have been deleted or you may not have access."
+          />
+        )}
       </PageFrame>
     )
   }
 
   return (
     <PageFrame>
-      <main>
-        {error && (
-          <PageError message={error} className="border-b border-border" />
-        )}
-
-        {isOwner && showAdd && (
-          <ManageMembers listId={id} members={members} onChanged={refresh} />
-        )}
-
-        <Feed
-          queryKey={["listTimeline", id]}
-          load={load}
-          emptyMessage={
-            isOwner
-              ? "no posts yet. Add members to populate this list."
-              : "no posts from list members yet."
-          }
+      {(error || opError) && (
+        <PageError
+          message={error ?? opError ?? ""}
+          className="border-b border-neutral"
         />
-      </main>
+      )}
+
+      {isOwner && showAdd && (
+        <ManageMembers listId={id} members={members} onChanged={refresh} />
+      )}
+
+      <Feed
+        queryKey={qk.lists.timeline(id)}
+        load={load}
+        emptyState={
+          <PageEmpty
+            icon={isOwner ? <UserPlusIcon /> : <PencilSquareIcon />}
+            title={isOwner ? "This list is empty" : "Nothing from members yet"}
+            description={
+              isOwner
+                ? "Add members to start building a focused timeline."
+                : "When list members post, you'll see them here."
+            }
+            actions={
+              isOwner ? (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => setShowAdd(true)}
+                >
+                  <UserPlusIcon className="size-3.5" />
+                  Add members
+                </Button>
+              ) : null
+            }
+          />
+        }
+      />
     </PageFrame>
   )
 }
@@ -162,26 +195,15 @@ function ManageMembers({
   onChanged: () => Promise<void>
 }) {
   const [q, setQ] = useState("")
-  const [results, setResults] = useState<Array<PublicUser>>([])
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    if (q.trim().length < 2) {
-      setResults([])
-      return
-    }
-    let cancel = false
-    const handle = window.setTimeout(async () => {
-      try {
-        const { users } = await api.search(q.trim())
-        if (!cancel) setResults(users)
-      } catch {}
-    }, 200)
-    return () => {
-      cancel = true
-      window.clearTimeout(handle)
-    }
-  }, [q])
+  const deferredQ = useDeferredValue(q.trim())
+  const { data: searchResult } = useQuery({
+    queryKey: qk.search(deferredQ),
+    queryFn: () => api.search(deferredQ),
+    enabled: deferredQ.length >= 2,
+  })
+  const results: Array<PublicUser> = searchResult?.users ?? []
 
   const memberIds = new Set(members.map((m) => m.id))
 
@@ -205,16 +227,16 @@ function ManageMembers({
   }
 
   return (
-    <section className="border-b border-border px-4 py-3">
+    <section className="border-b border-neutral px-4 py-3">
       <h2 className="text-sm font-semibold">Members</h2>
       {members.length === 0 ? (
-        <p className="mt-1 text-xs text-muted-foreground">No members yet.</p>
+        <p className="mt-1 text-xs text-tertiary">No members yet.</p>
       ) : (
         <ul className="mt-2 flex flex-wrap gap-2">
           {members.map((m) => (
             <li
               key={m.id}
-              className="flex items-center gap-2 rounded-full border border-border bg-card/40 py-1 pr-2 pl-1 text-xs"
+              className="bg-card/40 flex items-center gap-2 rounded-full border border-neutral py-1 pr-2 pl-1 text-xs"
             >
               <Avatar
                 src={m.avatarUrl}
@@ -228,24 +250,21 @@ function ManageMembers({
               </span>
               <Button
                 type="button"
-                size="icon-xs"
-                variant="ghost"
+                size="sm"
+                variant="transparent"
                 onClick={() => remove(m.id)}
                 disabled={busy}
-                className="shrink-0 text-muted-foreground hover:text-destructive"
+                className="hover:text-destructive shrink-0 text-tertiary"
                 aria-label="Remove"
               >
-                <XIcon size={12} />
+                <XMarkIcon className="size-3" />
               </Button>
             </li>
           ))}
         </ul>
       )}
       <div className="mt-3">
-        <Label
-          htmlFor="list-member-search"
-          className="text-xs text-muted-foreground"
-        >
+        <Label htmlFor="list-member-search" className="text-xs text-tertiary">
           Add a user
         </Label>
         <Input
@@ -256,7 +275,7 @@ function ManageMembers({
           className="mt-1.5 h-8 text-sm"
         />
         {results.length > 0 && (
-          <ul className="mt-2 divide-y divide-border rounded-md border border-border">
+          <ul className="mt-2 divide-y divide-neutral rounded-md border border-neutral">
             {results.map((u) => {
               const already = memberIds.has(u.id)
               return (
@@ -276,14 +295,12 @@ function ManageMembers({
                       <div className="font-medium">
                         {u.displayName ?? `@${u.handle}`}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        @{u.handle}
-                      </div>
+                      <div className="text-xs text-tertiary">@{u.handle}</div>
                     </div>
                   </div>
                   <Button
                     size="sm"
-                    variant={already ? "ghost" : "default"}
+                    variant={already ? "transparent" : "outline"}
                     disabled={busy || already}
                     onClick={() => add(u.id)}
                   >

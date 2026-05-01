@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router"
-import { MacfolioPill, isMacfolioUrl } from "./macfolio-card"
+import { LinkPill } from "./link-card"
 import type { ReactNode } from "react"
 
 type Part =
@@ -26,11 +26,6 @@ export function linkifyText(text: string): Array<Part> {
   return parts
 }
 
-/**
- * Renders text with hashtags, @mentions, and URLs auto-linked. Use anywhere user-authored
- * prose is shown read-only — post bodies, profile bios, etc. The output is inline content;
- * the caller controls the wrapping element (typically `<p>`).
- */
 export function RichText({ text }: { text: string }): ReactNode {
   const parts = linkifyText(text)
   return (
@@ -61,20 +56,7 @@ export function RichText({ text }: { text: string }): ReactNode {
             </Link>
           )
         }
-        if (isMacfolioUrl(p.value)) {
-          return <MacfolioPill key={i} url={p.value} />
-        }
-        return (
-          <a
-            key={i}
-            href={p.value}
-            target="_blank"
-            rel="noreferrer"
-            className="break-all text-primary hover:underline"
-          >
-            {p.value}
-          </a>
-        )
+        return <LinkPill key={i} url={p.value} />
       })}
     </>
   )

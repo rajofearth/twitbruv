@@ -1,52 +1,85 @@
-import { mergeProps } from "@base-ui/react/merge-props"
-import { useRender } from "@base-ui/react/use-render"
-import { cva } from "class-variance-authority"
 import { cn } from "@workspace/ui/lib/utils"
-import type { VariantProps } from "class-variance-authority"
+import type { CSSProperties, ReactNode } from "react"
 
-const badgeVariants = cva(
-  "group/badge inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2 py-0.5 text-[0.625rem] font-medium whitespace-nowrap transition-all focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-2.5!",
-  {
-    variants: {
-      variant: {
-        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
-        secondary:
-          "bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80",
-        destructive:
-          "bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
-        outline:
-          "border-border bg-input/20 text-foreground dark:bg-input/30 [a]:hover:bg-muted [a]:hover:text-muted-foreground",
-        ghost:
-          "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
-        link: "text-primary underline-offset-4 hover:underline",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-    },
-  }
-)
+const variantStyles = {
+  neutral: "bg-subtle text-secondary",
+  danger: "bg-danger-subtle text-danger",
+  warning: "bg-warn-subtle text-warn",
+  success: "bg-success-subtle text-success",
+  merged: "bg-violet-500/15 text-violet-700",
+} as const
 
-function Badge({
-  className,
-  variant = "default",
-  render,
-  ...props
-}: useRender.ComponentProps<"span"> & VariantProps<typeof badgeVariants>) {
-  return useRender({
-    defaultTagName: "span",
-    props: mergeProps<"span">(
-      {
-        className: cn(badgeVariants({ variant }), className),
-      },
-      props
-    ),
-    render,
-    state: {
-      slot: "badge",
-      variant,
-    },
-  })
+export type BadgeVariant = keyof typeof variantStyles
+
+export interface BadgeProps {
+  variant?: BadgeVariant
+  /** Hex color (e.g. "#d73a4a" or "d73a4a"). Overrides variant. Computes background and foreground automatically. */
+  color?: string | null
+  className?: string
+  children: ReactNode
 }
 
-export { Badge, badgeVariants }
+function hexToRgb(hex: string): [number, number, number] | null {
+  const clean = hex.replace(/^#/, "")
+  if (clean.length !== 6) return null
+  const n = parseInt(clean, 16)
+  if (Number.isNaN(n)) return null
+  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]
+}
+
+function luminance(r: number, g: number, b: number): number {
+  const lin = [r / 255, g / 255, b / 255].map((c) =>
+    c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  )
+  return 0.2126 * lin[0]! + 0.7152 * lin[1]! + 0.0722 * lin[2]!
+}
+
+function colorStyles(hex: string): CSSProperties | null {
+  const raw = hex.startsWith("#") ? hex : `#${hex}`
+  const rgb = hexToRgb(raw)
+  if (!rgb) return null
+  const [r, g, b] = rgb
+  const lum = luminance(r, g, b)
+  const fg = lum > 0.4 ? `oklch(0.35 0.15 ${hueFromRgb(r, g, b)})` : raw
+  return {
+    backgroundColor: `rgba(${r}, ${g}, ${b}, 0.12)`,
+    color: fg,
+  }
+}
+
+function hueFromRgb(r: number, g: number, b: number): number {
+  const rn = r / 255
+  const gn = g / 255
+  const bn = b / 255
+  const max = Math.max(rn, gn, bn)
+  const min = Math.min(rn, gn, bn)
+  const d = max - min
+  if (d === 0) return 0
+  let h = 0
+  if (max === rn) h = ((gn - bn) / d) % 6
+  else if (max === gn) h = (bn - rn) / d + 2
+  else h = (rn - gn) / d + 4
+  h = Math.round(h * 60)
+  return h < 0 ? h + 360 : h
+}
+
+export function Badge({
+  variant = "neutral",
+  color,
+  className,
+  children,
+}: BadgeProps) {
+  const style = color ? colorStyles(color) : undefined
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-md px-1.5 py-0.5 text-xs leading-tight font-medium",
+        !style && variantStyles[variant],
+        className
+      )}
+      style={style ?? undefined}
+    >
+      {children}
+    </span>
+  )
+}

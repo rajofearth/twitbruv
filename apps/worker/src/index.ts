@@ -1,39 +1,41 @@
-import PgBoss from 'pg-boss'
-import pino from 'pino'
-import { createMailer } from '@workspace/email'
-import { createDbFromEnv } from '@workspace/db'
-import { createS3 } from '@workspace/media/s3'
-import type { MediaEnv } from '@workspace/media/env'
-import { loadEnv } from './env.ts'
-import { handleEmailJob } from './jobs/email.ts'
-import { handleMediaJob } from './jobs/media-process.ts'
-import { publishDueScheduledPosts } from './jobs/publish-scheduled.ts'
-import { handleGithubUnfurlJob } from './jobs/github-unfurl.ts'
+import { Worker } from "bullmq"
+import pino from "pino"
+import { createMailer } from "@workspace/email"
+import { createDbFromEnv } from "@workspace/db"
+import { createS3 } from "@workspace/media/s3"
+import type { MediaEnv } from "@workspace/media/env"
+import { loadEnv } from "./env.ts"
+import { handleEmailJob } from "./jobs/email.ts"
+import { handleMediaJob } from "./jobs/media-process.ts"
+import { publishDueScheduledPosts } from "./jobs/publish-scheduled.ts"
+import { handleGithubUnfurlJob } from "./jobs/github-unfurl.ts"
+import { handleYoutubeUnfurlJob } from "./jobs/youtube-unfurl.ts"
+import { handleGenericUnfurlJob } from "./jobs/generic-unfurl.ts"
+import { handleXUnfurlJob } from "./jobs/x-unfurl.ts"
+
+const BULLMQ_PREFIX = "twotter:queue"
 
 const env = loadEnv()
 
 const log = pino({
   level: env.LOG_LEVEL,
-  ...(env.NODE_ENV === 'production'
+  ...(env.NODE_ENV === "production"
     ? {}
     : {
         transport: {
-          target: 'pino-pretty',
-          options: { colorize: true, translateTime: 'HH:MM:ss', ignore: 'pid,hostname' },
+          target: "pino-pretty",
+          options: {
+            colorize: true,
+            translateTime: "HH:MM:ss",
+            ignore: "pid,hostname",
+          },
         },
       }),
 })
 
 const mailer = createMailer({
   from: env.EMAIL_FROM,
-  provider: env.EMAIL_PROVIDER,
   resendApiKey: env.RESEND_API_KEY,
-  smtp: {
-    host: env.SMTP_HOST,
-    port: env.SMTP_PORT,
-    user: env.SMTP_USER,
-    pass: env.SMTP_PASS,
-  },
 })
 
 const db = createDbFromEnv()
@@ -47,60 +49,154 @@ const mediaEnv: MediaEnv = {
 }
 const s3 = createS3(mediaEnv)
 
-const boss = new PgBoss({ connectionString: env.DATABASE_URL })
-boss.on('error', (err) => log.error({ err: err.message }, 'pg_boss_error'))
+const connection = {
+  url: env.REDIS_URL,
+  maxRetriesPerRequest: null as null,
+}
 
-await boss.start()
-// pg-boss v10 needs queues declared before work/send. Idempotent.
-// Serialize: creating two queues in parallel deadlocks on pgboss.queue row locks.
-await boss.createQueue('email.send')
-await boss.createQueue('media.process')
-await boss.createQueue('github.unfurl')
+const workerOpts = { connection, prefix: BULLMQ_PREFIX }
 
-await boss.work('email.send', { batchSize: 5 }, async (jobs) => {
-  await Promise.all(jobs.map((job) => handleEmailJob(mailer, job.data)))
-})
+const workers: Worker[] = [
+  new Worker(
+    "email.send",
+    async (job) => {
+      await handleEmailJob(mailer, job.data)
+    },
+    { ...workerOpts, concurrency: 5 },
+  ),
 
-await boss.work('media.process', { batchSize: 2 }, async (jobs) => {
-  for (const job of jobs) {
-    log.info({ payload: job.data }, 'media_process_start')
-    try {
-      await handleMediaJob({ db, s3, env: mediaEnv, payload: job.data })
-      log.info({ payload: job.data }, 'media_process_done')
-    } catch (err) {
-      log.error(
-        { err: err instanceof Error ? err.stack ?? err.message : err, payload: job.data },
-        'media_process_failed',
-      )
-      throw err
-    }
-  }
-})
-
-// GitHub URL unfurl. batchSize=4 caps concurrent GitHub RTTs at 4 per worker tick — at
-// ~500ms p50, that's ~8 RPS max, far under the 5000/hr authenticated limit. Most jobs are
-// cache hits anyway because url_unfurls.refKey dedupes across posters.
-await boss.work('github.unfurl', { batchSize: 4 }, async (jobs) => {
-  for (const job of jobs) {
-    try {
-      const result = await handleGithubUnfurlJob(db, job.data)
-      if (!result.ok) {
-        log.warn({ payload: job.data, reason: result.reason }, 'github_unfurl_failed')
+  new Worker(
+    "media.process",
+    async (job) => {
+      log.info({ payload: job.data }, "media_process_start")
+      try {
+        await handleMediaJob({ db, s3, env: mediaEnv, payload: job.data })
+        log.info({ payload: job.data }, "media_process_done")
+      } catch (err) {
+        log.error(
+          {
+            err: err instanceof Error ? (err.stack ?? err.message) : err,
+            payload: job.data,
+          },
+          "media_process_failed",
+        )
+        throw err
       }
-    } catch (err) {
-      // The handler persists most failures itself; only programmer errors reach here. Don't
-      // re-throw — pg-boss would retry, and a parse error isn't going to fix itself.
-      log.error(
-        { err: err instanceof Error ? err.stack ?? err.message : err, payload: job.data },
-        'github_unfurl_handler_error',
-      )
-    }
-  }
-})
+    },
+    { ...workerOpts, concurrency: 2 },
+  ),
 
-// Polls every 30s for scheduled posts whose publish time has arrived. Cheap query, indexed.
-// Runs in-process rather than via pg-boss because it doesn't need durability or fan-out — it
-// just walks the table.
+  new Worker(
+    "github.unfurl",
+    async (job) => {
+      try {
+        const result = await handleGithubUnfurlJob(db, job.data)
+        if (!result.ok) {
+          log.warn(
+            { payload: job.data, reason: result.reason },
+            "github_unfurl_failed",
+          )
+        }
+      } catch (err) {
+        log.error(
+          {
+            err: err instanceof Error ? (err.stack ?? err.message) : err,
+            payload: job.data,
+          },
+          "github_unfurl_handler_error",
+        )
+      }
+    },
+    { ...workerOpts, concurrency: 4 },
+  ),
+
+  new Worker(
+    "youtube.unfurl",
+    async (job) => {
+      try {
+        const result = await handleYoutubeUnfurlJob(
+          db,
+          job.data,
+          env.YOUTUBE_API_KEY,
+        )
+        if (!result.ok) {
+          log.warn(
+            { payload: job.data, reason: result.reason },
+            "youtube_unfurl_failed",
+          )
+        }
+      } catch (err) {
+        log.error(
+          {
+            err: err instanceof Error ? (err.stack ?? err.message) : err,
+            payload: job.data,
+          },
+          "youtube_unfurl_handler_error",
+        )
+      }
+    },
+    { ...workerOpts, concurrency: 4 },
+  ),
+
+  new Worker(
+    "generic.unfurl",
+    async (job) => {
+      try {
+        const result = await handleGenericUnfurlJob(db, job.data)
+        if (!result.ok) {
+          log.warn(
+            { payload: job.data, reason: result.reason },
+            "generic_unfurl_failed",
+          )
+        }
+      } catch (err) {
+        log.error(
+          {
+            err: err instanceof Error ? (err.stack ?? err.message) : err,
+            payload: job.data,
+          },
+          "generic_unfurl_handler_error",
+        )
+      }
+    },
+    { ...workerOpts, concurrency: 4 },
+  ),
+
+  new Worker(
+    "x.unfurl",
+    async (job) => {
+      try {
+        const result = await handleXUnfurlJob(
+          db,
+          job.data,
+          env.FXTWITTER_API_BASE_URL,
+        )
+        if (!result.ok) {
+          log.warn(
+            { payload: job.data, reason: result.reason },
+            "x_unfurl_failed",
+          )
+        }
+      } catch (err) {
+        log.error(
+          {
+            err: err instanceof Error ? (err.stack ?? err.message) : err,
+            payload: job.data,
+          },
+          "x_unfurl_handler_error",
+        )
+      }
+    },
+    { ...workerOpts, concurrency: 4 },
+  ),
+]
+
+for (const w of workers) {
+  w.on("error", (err) =>
+    log.error({ err: err instanceof Error ? err.message : err }, "bullmq_error"),
+  )
+}
+
 const SCHEDULED_INTERVAL_MS = 30_000
 let scheduledRunning = false
 const scheduledTimer = setInterval(async () => {
@@ -108,24 +204,34 @@ const scheduledTimer = setInterval(async () => {
   scheduledRunning = true
   try {
     const n = await publishDueScheduledPosts(db)
-    if (n > 0) log.info({ published: n }, 'scheduled_posts_published')
+    if (n > 0) log.info({ published: n }, "scheduled_posts_published")
   } catch (err) {
-    log.error({ err }, 'scheduled_posts_failed')
+    log.error({ err }, "scheduled_posts_failed")
   } finally {
     scheduledRunning = false
   }
 }, SCHEDULED_INTERVAL_MS)
 
 log.info(
-  { queues: ['email.send', 'media.process', 'github.unfurl'], scheduledIntervalMs: SCHEDULED_INTERVAL_MS },
-  'worker_ready',
+  {
+    queues: [
+      "email.send",
+      "media.process",
+      "github.unfurl",
+      "youtube.unfurl",
+      "generic.unfurl",
+      "x.unfurl",
+    ],
+    scheduledIntervalMs: SCHEDULED_INTERVAL_MS,
+  },
+  "worker_ready",
 )
 
 const shutdown = async () => {
-  log.info('worker_shutdown')
+  log.info("worker_shutdown")
   clearInterval(scheduledTimer)
-  await boss.stop({ graceful: true })
+  await Promise.all(workers.map((w) => w.close()))
   process.exit(0)
 }
-process.on('SIGINT', shutdown)
-process.on('SIGTERM', shutdown)
+process.on("SIGINT", shutdown)
+process.on("SIGTERM", shutdown)

@@ -24,11 +24,9 @@ function systemPrefersDark() {
   return window.matchMedia("(prefers-color-scheme: dark)").matches
 }
 
-function applyThemeClass(resolved: "light" | "dark") {
+function applyTheme(resolved: "light" | "dark") {
   if (typeof document === "undefined") return
-  const root = document.documentElement
-  if (resolved === "dark") root.classList.add("dark")
-  else root.classList.remove("dark")
+  document.documentElement.setAttribute("data-theme", resolved)
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -42,14 +40,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const resolved =
       theme === "system" ? (systemPrefersDark() ? "dark" : "light") : theme
     setResolvedTheme(resolved)
-    applyThemeClass(resolved)
+    applyTheme(resolved)
 
     if (theme !== "system") return
     const mq = window.matchMedia("(prefers-color-scheme: dark)")
     const onChange = () => {
       const r = mq.matches ? "dark" : "light"
       setResolvedTheme(r)
-      applyThemeClass(r)
+      applyTheme(r)
     }
     mq.addEventListener("change", onChange)
     return () => mq.removeEventListener("change", onChange)
@@ -75,9 +73,9 @@ export function useTheme() {
 
 /**
  * Inline script string to drop into the <head> before React hydrates. Reads the user's
- * stored preference (or falls back to system) and applies the `dark` class synchronously so
- * there's no flash of the wrong theme.
+ * stored preference (or falls back to system) and applies the `data-theme` attribute
+ * synchronously so there's no flash of the wrong theme.
  */
 export const themeBootstrapScript = `
-(function(){try{var s=localStorage.getItem(${JSON.stringify(STORAGE_KEY)});var t=s||'system';var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();
+(function(){try{var s=localStorage.getItem(${JSON.stringify(STORAGE_KEY)});var t=s||'system';var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.setAttribute('data-theme',d?'dark':'light');}catch(e){}})();
 `.trim()
