@@ -19,6 +19,7 @@
     "@workspace/github-unfurl": "workspace:*",
     "@workspace/media": "workspace:*",
     "@workspace/rate-limit": "workspace:*",
+    "@workspace/redis-url": "workspace:*",
     "@workspace/types": "workspace:*",
     "@workspace/url-unfurl-core": "workspace:*",
     "@workspace/validators": "workspace:*",

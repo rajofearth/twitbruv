@@ -8,6 +8,7 @@ import { createCache, type Cache } from "./cache.ts"
 import { createPubSub, type PubSub } from "./pubsub.ts"
 import { createLogger, type Logger } from "./logger.ts"
 import { makeRateLimit } from "@workspace/rate-limit"
+import { resolveRedisUrl } from "@workspace/redis-url"
 import { createTracker, type TrackFn } from "./analytics.ts"
 import { createModerator, type Moderator } from "./moderation.ts"
 import { createAppJobQueues, type AppJobQueues } from "./job-queues.ts"
@@ -30,6 +31,10 @@ export interface AppContext {
 
 export async function buildContext(): Promise<AppContext> {
   const env = loadEnv()
+  const redisUrl = resolveRedisUrl(env.REDIS_URL, {
+    password: env.REDIS_PASSWORD,
+    username: env.REDIS_USERNAME,
+  })
   const db = createDb(env.DATABASE_URL)
   const log = createLogger(env)
 
@@ -108,11 +113,11 @@ export async function buildContext(): Promise<AppContext> {
     allowedOrigins: env.AUTH_TRUSTED_ORIGINS,
   })
 
-  const jobQueues = createAppJobQueues(env.REDIS_URL)
+  const jobQueues = createAppJobQueues(redisUrl)
 
-  const cache = createCache(env.REDIS_URL)
-  const pubsub = createPubSub(env.REDIS_URL)
-  const rateLimit = makeRateLimit(env.REDIS_URL, log)
+  const cache = createCache(redisUrl)
+  const pubsub = createPubSub(redisUrl)
+  const rateLimit = makeRateLimit(redisUrl, log)
   const track = createTracker(
     env.DATABUDDY_API_KEY,
     env.DATABUDDY_WEBSITE_ID,

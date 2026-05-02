@@ -1,9 +1,11 @@
 import { Worker } from "bullmq"
 import pino from "pino"
+import Redis from "ioredis"
 import { createMailer } from "@workspace/email"
 import { createDbFromEnv } from "@workspace/db"
 import { createS3 } from "@workspace/media/s3"
 import type { MediaEnv } from "@workspace/media/env"
+import { resolveRedisUrl } from "@workspace/redis-url"
 import { loadEnv } from "./env.ts"
 import { handleEmailJob } from "./jobs/email.ts"
 import { handleMediaJob } from "./jobs/media-process.ts"
@@ -49,10 +51,16 @@ const mediaEnv: MediaEnv = {
 }
 const s3 = createS3(mediaEnv)
 
-const connection = {
-  url: env.REDIS_URL,
-  maxRetriesPerRequest: null as null,
-}
+const redisUrl = resolveRedisUrl(env.REDIS_URL, {
+  password: env.REDIS_PASSWORD,
+  username: env.REDIS_USERNAME,
+})
+
+const connection = new Redis(redisUrl, {
+  maxRetriesPerRequest: null,
+  enableReadyCheck: true,
+  lazyConnect: false,
+})
 
 const workerOpts = { connection, prefix: BULLMQ_PREFIX }
 
@@ -231,6 +239,7 @@ const shutdown = async () => {
   log.info("worker_shutdown")
   clearInterval(scheduledTimer)
   await Promise.all(workers.map((w) => w.close()))
+  await connection.quit()
   process.exit(0)
 }
 process.on("SIGINT", shutdown)

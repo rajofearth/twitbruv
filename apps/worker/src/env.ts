@@ -17,6 +17,16 @@ const envSchema = z.object({
   S3_PUBLIC_URL: z.string().url(),
 
   REDIS_URL: z.string().default("redis://localhost:6379"),
+  REDIS_PASSWORD: z.preprocess((v) => {
+    if (typeof v !== "string") return undefined
+    const t = v.trim()
+    return t.length === 0 ? undefined : t
+  }, z.string().optional()),
+  REDIS_USERNAME: z.preprocess((v) => {
+    if (typeof v !== "string") return undefined
+    const t = v.trim()
+    return t.length === 0 ? undefined : t
+  }, z.string().optional()),
   GITHUB_UNFURL_TOKEN: z.string().optional(),
   YOUTUBE_API_KEY: z.string().optional(),
   FXTWITTER_API_BASE_URL: z.string().optional(),

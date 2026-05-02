@@ -1,3 +1,4 @@
+import Redis from "ioredis"
 import { Queue } from "bullmq"
 
 export const BULLMQ_PREFIX = "twotter:queue"
@@ -17,11 +18,12 @@ export type UnfurlJobPayload = {
   provider: "github" | "youtube" | "x" | "generic"
 }
 
-function redisConnection(redisUrl: string) {
-  return {
-    url: redisUrl,
-    maxRetriesPerRequest: null as null,
-  }
+function createSharedRedis(redisUrl: string) {
+  return new Redis(redisUrl, {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: true,
+    lazyConnect: false,
+  })
 }
 
 export interface AppJobQueues {
@@ -52,7 +54,7 @@ function unfurlQueueFor(
 }
 
 export function createAppJobQueues(redisUrl: string): AppJobQueues {
-  const connection = redisConnection(redisUrl)
+  const connection = createSharedRedis(redisUrl)
   const base = { connection, prefix: BULLMQ_PREFIX }
 
   const mediaProcess = new Queue(QUEUE_NAMES.mediaProcess, {
@@ -105,6 +107,7 @@ export function createAppJobQueues(redisUrl: string): AppJobQueues {
         genericUnfurl.close(),
         xUnfurl.close(),
       ])
+      await connection.quit()
     },
     async enqueueMediaProcess(data: { mediaId: string }) {
       await mediaProcess.add(QUEUE_NAMES.mediaProcess, data)

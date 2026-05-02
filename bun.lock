@@ -27,6 +27,7 @@
         "@workspace/github-unfurl": "workspace:*",
         "@workspace/media": "workspace:*",
         "@workspace/rate-limit": "workspace:*",
+        "@workspace/redis-url": "workspace:*",
         "@workspace/types": "workspace:*",
         "@workspace/url-unfurl-core": "workspace:*",
         "@workspace/validators": "workspace:*",
@@ -118,10 +119,12 @@
         "@workspace/email": "workspace:*",
         "@workspace/github-unfurl": "workspace:*",
         "@workspace/media": "workspace:*",
+        "@workspace/redis-url": "workspace:*",
         "@workspace/url-unfurl-core": "workspace:*",
         "@workspace/x-unfurl": "workspace:*",
         "@workspace/youtube-unfurl": "workspace:*",
         "bullmq": "^5.76.4",
+        "ioredis": "^5.10.1",
         "pino": "^10.3.1",
         "zod": "^4.4.1",
       },
@@ -232,6 +235,15 @@
         "@workspace/config-tsconfig": "workspace:*",
         "hono": "^4.12.16",
         "pino": "^10.3.1",
+        "typescript": "^6.0.3",
+      },
+    },
+    "packages/redis-url": {
+      "name": "@workspace/redis-url",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@types/node": "^25.6.0",
+        "@workspace/config-tsconfig": "workspace:*",
         "typescript": "^6.0.3",
       },
     },
@@ -1388,6 +1400,8 @@
     "@workspace/media": ["@workspace/media@workspace:packages/media"],
 
     "@workspace/rate-limit": ["@workspace/rate-limit@workspace:packages/rate-limit"],
+
+    "@workspace/redis-url": ["@workspace/redis-url@workspace:packages/redis-url"],
 
     "@workspace/types": ["@workspace/types@workspace:packages/types"],
 
