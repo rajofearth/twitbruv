@@ -34,7 +34,7 @@ import {
   refKeyForGeneric,
 } from '@workspace/url-unfurl-core'
 import { URL_PATTERN, trimTrailingPunct } from '@workspace/url-unfurl-core/text'
-import type { AppJobQueues, UnfurlJobPayload } from './job-queues.ts'
+import type PgBoss from 'pg-boss'
 
 type CombinedUnfurl =
   | { provider: 'github'; url: string; refKey: string; ref: GithubRef }
@@ -140,7 +140,25 @@ function providerLabel(r: CombinedUnfurl): string {
   return 'Web'
 }
 
-export type UnfurlJob = UnfurlJobPayload
+export type UnfurlJob = {
+  unfurlId: string
+  url: string
+  refKey: string
+  provider: 'github' | 'youtube' | 'x' | 'generic'
+}
+
+const UNFURL_RETRY = {
+  retryLimit: 3,
+  retryDelay: 5000,
+  retryBackoff: true as const,
+}
+
+function unfurlQueueName(provider: UnfurlJob['provider']): string {
+  if (provider === 'youtube') return 'youtube.unfurl'
+  if (provider === 'generic') return 'generic.unfurl'
+  if (provider === 'x') return 'x.unfurl'
+  return 'github.unfurl'
+}
 
 interface AttachResult {
   toEnqueue: Array<UnfurlJob>
@@ -241,21 +259,15 @@ export async function attachPostUnfurls(opts: {
 }
 
 export async function dispatchUnfurlJobs(
-  jobQueues: AppJobQueues,
+  boss: PgBoss,
   jobs: Array<UnfurlJob>,
 ): Promise<void> {
   if (jobs.length === 0) return
   await Promise.all(
     jobs.map((j) => {
-      const queue =
-        j.provider === 'youtube'
-          ? 'youtube.unfurl'
-          : j.provider === 'generic'
-            ? 'generic.unfurl'
-            : j.provider === 'x'
-              ? 'x.unfurl'
-              : 'github.unfurl'
-      return jobQueues.enqueueUnfurl(j).catch((err) => {
+      const queue = unfurlQueueName(j.provider)
+      const data = { unfurlId: j.unfurlId, url: j.url, refKey: j.refKey }
+      return boss.send(queue, data, UNFURL_RETRY).catch((err) => {
         console.warn('[unfurl] enqueue failed', {
           err: (err as Error).message,
           refKey: j.refKey,
@@ -270,7 +282,7 @@ const INLINE_FETCH_TIMEOUT_MS = 3000
 
 export async function runInlineUnfurls(
   db: Database,
-  jobQueues: AppJobQueues,
+  boss: PgBoss,
   jobs: Array<UnfurlJob>,
   opts?: { youtubeApiKey?: string; fxtwitterApiBaseUrl?: string },
 ): Promise<void> {
@@ -285,12 +297,18 @@ export async function runInlineUnfurls(
         if (j.provider === 'generic') {
           const result = await Promise.race([fetchGenericCard(j.url), timeout])
           if (result === 'timeout') {
-            await jobQueues.enqueueUnfurl(j).catch((err) => {
-              console.warn('[generic-unfurl] fallback enqueue failed', {
-                err: (err as Error).message,
+            await boss
+              .send(unfurlQueueName(j.provider), {
+                unfurlId: j.unfurlId,
+                url: j.url,
                 refKey: j.refKey,
+              }, UNFURL_RETRY)
+              .catch((err) => {
+                console.warn('[generic-unfurl] fallback enqueue failed', {
+                  err: (err as Error).message,
+                  refKey: j.refKey,
+                })
               })
-            })
             return
           }
           await persistGenericCardOutcome(db, j.unfurlId, result)
@@ -304,12 +322,18 @@ export async function runInlineUnfurls(
           }
           const result = await Promise.race([fetchYouTubeCard(yref, opts?.youtubeApiKey), timeout])
           if (result === 'timeout') {
-            await jobQueues.enqueueUnfurl(j).catch((err) => {
-              console.warn('[youtube-unfurl] fallback enqueue failed', {
-                err: (err as Error).message,
+            await boss
+              .send(unfurlQueueName(j.provider), {
+                unfurlId: j.unfurlId,
+                url: j.url,
                 refKey: j.refKey,
+              }, UNFURL_RETRY)
+              .catch((err) => {
+                console.warn('[youtube-unfurl] fallback enqueue failed', {
+                  err: (err as Error).message,
+                  refKey: j.refKey,
+                })
               })
-            })
             return
           }
           await persistYoutubeCardOutcome(db, j.unfurlId, result)
@@ -326,12 +350,18 @@ export async function runInlineUnfurls(
             timeout,
           ])
           if (result === 'timeout') {
-            await jobQueues.enqueueUnfurl(j).catch((err) => {
-              console.warn('[x-unfurl] fallback enqueue failed', {
-                err: (err as Error).message,
+            await boss
+              .send(unfurlQueueName(j.provider), {
+                unfurlId: j.unfurlId,
+                url: j.url,
                 refKey: j.refKey,
+              }, UNFURL_RETRY)
+              .catch((err) => {
+                console.warn('[x-unfurl] fallback enqueue failed', {
+                  err: (err as Error).message,
+                  refKey: j.refKey,
+                })
               })
-            })
             return
           }
           await persistXStatusCardOutcome(db, j.unfurlId, result)
@@ -344,12 +374,18 @@ export async function runInlineUnfurls(
         }
         const result = await Promise.race([fetchGithubCard(ref), timeout])
         if (result === 'timeout') {
-          await jobQueues.enqueueUnfurl(j).catch((err) => {
-            console.warn('[github-unfurl] fallback enqueue failed', {
-              err: (err as Error).message,
+          await boss
+            .send(unfurlQueueName(j.provider), {
+              unfurlId: j.unfurlId,
+              url: j.url,
               refKey: j.refKey,
+            }, UNFURL_RETRY)
+            .catch((err) => {
+              console.warn('[github-unfurl] fallback enqueue failed', {
+                err: (err as Error).message,
+                refKey: j.refKey,
+              })
             })
-          })
           return
         }
         await persistCardOutcome(db, j.unfurlId, ref, result)

@@ -4,13 +4,19 @@ import { and, eq } from '@workspace/db'
 import { schema } from '@workspace/db'
 import { headObject, presignPut, publicUrl, type S3 } from '@workspace/media/s3'
 import type { MediaEnv } from '@workspace/media/env'
-import type { AppJobQueues } from '../lib/job-queues.ts'
+import type PgBoss from 'pg-boss'
 import { requireHandle, type HonoEnv } from '../middleware/session.ts'
 
 export interface MediaDeps {
   s3: S3
   mediaEnv: MediaEnv
-  jobQueues: AppJobQueues
+  boss: PgBoss
+}
+
+const MEDIA_JOB_RETRY = {
+  retryLimit: 5,
+  retryDelay: 2000,
+  retryBackoff: true as const,
 }
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024
@@ -94,7 +100,7 @@ export function createMediaRoute(deps: MediaDeps) {
       .set({ processingState: 'processing', bytes: head.contentLength ?? media.bytes })
       .where(eq(schema.media.id, id))
 
-    await deps.jobQueues.enqueueMediaProcess({ mediaId: id })
+    await deps.boss.send('media.process', { mediaId: id }, MEDIA_JOB_RETRY)
 
     return c.json({ mediaId: id, processing: true })
   })

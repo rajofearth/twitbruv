@@ -86,16 +86,6 @@ const envSchema = z.object({
     ),
 
   REDIS_URL: z.string(),
-  REDIS_PASSWORD: z.preprocess((v) => {
-    if (typeof v !== "string") return undefined
-    const t = v.trim()
-    return t.length === 0 ? undefined : t
-  }, z.string().optional()),
-  REDIS_USERNAME: z.preprocess((v) => {
-    if (typeof v !== "string") return undefined
-    const t = v.trim()
-    return t.length === 0 ? undefined : t
-  }, z.string().optional()),
 
   S3_ENDPOINT: z.string().url(),
   S3_REGION: z.string().default("auto"),

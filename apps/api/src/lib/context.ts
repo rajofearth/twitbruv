@@ -1,3 +1,4 @@
+import PgBoss from "pg-boss"
 import { createAuth, type AuthInstance } from "@workspace/auth/server"
 import { createDb, type Database } from "@workspace/db"
 import { createMailer, type Mailer } from "@workspace/email"
@@ -8,10 +9,8 @@ import { createCache, type Cache } from "./cache.ts"
 import { createPubSub, type PubSub } from "./pubsub.ts"
 import { createLogger, type Logger } from "./logger.ts"
 import { makeRateLimit } from "@workspace/rate-limit"
-import { resolveRedisUrl } from "@workspace/redis-url"
 import { createTracker, type TrackFn } from "./analytics.ts"
 import { createModerator, type Moderator } from "./moderation.ts"
-import { createAppJobQueues, type AppJobQueues } from "./job-queues.ts"
 
 export interface AppContext {
   env: Env
@@ -20,7 +19,7 @@ export interface AppContext {
   auth: AuthInstance
   s3: S3
   mediaEnv: MediaEnv
-  jobQueues: AppJobQueues
+  boss: PgBoss
   cache: Cache
   pubsub: PubSub
   log: Logger
@@ -31,10 +30,6 @@ export interface AppContext {
 
 export async function buildContext(): Promise<AppContext> {
   const env = loadEnv()
-  const redisUrl = resolveRedisUrl(env.REDIS_URL, {
-    password: env.REDIS_PASSWORD,
-    username: env.REDIS_USERNAME,
-  })
   const db = createDb(env.DATABASE_URL)
   const log = createLogger(env)
 
@@ -98,26 +93,29 @@ export async function buildContext(): Promise<AppContext> {
     S3_SECRET_ACCESS_KEY: env.S3_SECRET_ACCESS_KEY,
     S3_BUCKET: env.S3_BUCKET,
     S3_PUBLIC_URL: env.S3_PUBLIC_URL,
-    // Route asset URLs through our signing proxy. The browser hits this URL, the API mints a
-    // short-lived signed S3 URL, then 302-redirects. Stable URLs on our domain, private bucket.
     MEDIA_PROXY_BASE: `${env.BETTER_AUTH_URL.replace(/\/$/, "")}/api/m`,
   }
   const s3 = createS3(mediaEnv)
 
-  // Run on every boot (idempotent): creates the bucket if missing, sets a public-read policy
-  // for object GETs, and applies CORS so the browser can upload directly. If you ever migrate
-  // to a managed bucket with externally-managed CORS/policy, gate this back to dev.
   await ensureBucket({
     s3,
     bucket: mediaEnv.S3_BUCKET,
     allowedOrigins: env.AUTH_TRUSTED_ORIGINS,
   })
 
-  const jobQueues = createAppJobQueues(redisUrl)
+  const boss = new PgBoss({ connectionString: env.DATABASE_URL })
+  boss.on("error", (err) => log.error({ err: err.message }, "pg_boss_error"))
+  await boss.start()
+  await boss.createQueue("email.send")
+  await boss.createQueue("media.process")
+  await boss.createQueue("github.unfurl")
+  await boss.createQueue("youtube.unfurl")
+  await boss.createQueue("generic.unfurl")
+  await boss.createQueue("x.unfurl")
 
-  const cache = createCache(redisUrl)
-  const pubsub = createPubSub(redisUrl)
-  const rateLimit = makeRateLimit(redisUrl, log)
+  const cache = createCache(env.REDIS_URL)
+  const pubsub = createPubSub(env.REDIS_URL)
+  const rateLimit = makeRateLimit(env.REDIS_URL, log)
   const track = createTracker(
     env.DATABUDDY_API_KEY,
     env.DATABUDDY_WEBSITE_ID,
@@ -132,7 +130,7 @@ export async function buildContext(): Promise<AppContext> {
     auth,
     s3,
     mediaEnv,
-    jobQueues,
+    boss,
     cache,
     pubsub,
     log,

@@ -189,7 +189,7 @@ app.route('/api/hashtags', hashtagsRoute)
 app.route('/api/search', searchRoute)
 app.route(
   '/api/media',
-  createMediaRoute({ s3: ctx.s3, mediaEnv: ctx.mediaEnv, jobQueues: ctx.jobQueues }),
+  createMediaRoute({ s3: ctx.s3, mediaEnv: ctx.mediaEnv, boss: ctx.boss }),
 )
 
 // Signing proxy: takes a stored object key on the path, mints a short-lived signed URL, and
