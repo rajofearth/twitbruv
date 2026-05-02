@@ -2,7 +2,11 @@ import { Hono } from 'hono'
 import { and, asc, desc, eq, inArray, isNull, lt, sql } from '@workspace/db'
 import { schema } from '@workspace/db'
 import { publicUrl } from '@workspace/media/s3'
-import { createPostSchema, editPostSchema } from '@workspace/validators'
+import {
+  createPostSchema,
+  editPostSchema,
+  paginationSchema,
+} from '@workspace/validators'
 import { handleRateLimitError } from '@workspace/rate-limit'
 import { requireHandle, type HonoEnv } from '../middleware/session.ts'
 import { toPostDto } from '../lib/post-dto.ts'
@@ -11,7 +15,7 @@ import { loadPostMedia } from '../lib/post-media.ts'
 import { loadArticleCards } from '../lib/article-cards.ts'
 import { loadRepostTargets } from '../lib/repost-targets.ts'
 import { loadQuoteTargets } from '../lib/quote-targets.ts'
-import { attachFeedChainPreviews } from '../lib/feed-chain-preview.ts'
+import { attachFeedChainPreviews, linkSamePageReplies, filterRedundantChainPosts } from '../lib/feed-chain-preview.ts'
 import { attachReplyParents } from '../lib/reply-parents.ts'
 import { loadPolls } from '../lib/polls.ts'
 import { linkHashtags } from '../lib/hashtags.ts'
@@ -918,8 +922,11 @@ postsRoute.get('/', async (c) => {
   const { db, mediaEnv, rateLimit } = c.get('ctx')
   await rateLimit(c, 'reads.feed')
   const viewerId = c.get('session')?.user.id
-  const limit = Math.min(Number(c.req.query('limit') ?? 40), 100)
-  const cursor = parseCursor(c.req.query('cursor'))
+  const { limit, cursor: cursorRaw } = paginationSchema.parse({
+    limit: c.req.query('limit'),
+    cursor: c.req.query('cursor'),
+  })
+  const cursor = parseCursor(cursorRaw)
 
   const rows = await db
     .select({ post: schema.posts, author: schema.users })
@@ -970,8 +977,13 @@ postsRoute.get('/', async (c) => {
   )
   await attachReplyParents({ db, viewerId, env: mediaEnv, posts })
   await attachFeedChainPreviews({ db, viewerId, env: mediaEnv, posts })
-  const nextCursor = posts.length === limit ? posts[posts.length - 1]!.createdAt : null
-  return c.json({ posts, nextCursor })
+  linkSamePageReplies(posts)
+  const filtered = filterRedundantChainPosts(posts)
+  const hasMore = limit > 0 && rows.length === limit
+  const nextCursor = hasMore
+    ? (rows.at(-1)?.post.createdAt.toISOString() ?? null)
+    : null
+  return c.json({ posts: filtered, nextCursor })
 })
 
 // Hide a reply from the conversation view. Allowed for the author of the
