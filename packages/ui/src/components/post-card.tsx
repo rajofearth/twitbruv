@@ -97,6 +97,17 @@ export interface PostCardProps {
   renderPostText?: (text: string) => ReactNode
 }
 
+function clickedInteractiveElement(target: EventTarget | null) {
+  return (
+    target instanceof Element &&
+    Boolean(
+      target.closest(
+        'a, button, input, textarea, select, summary, label, [role="button"], [role="menuitem"], [data-slot^="dropdown-menu"], [data-post-card-ignore-open]'
+      )
+    )
+  )
+}
+
 export function PostCard({
   author,
   text,
@@ -184,7 +195,13 @@ export function PostCard({
       fullWidth
       className={cn(!disableHover && "cursor-pointer", className)}
     >
-      <article className="flex w-full flex-col px-4 py-3" onClick={onClick}>
+      <article
+        className="flex w-full flex-col px-4 py-3"
+        onClick={(event) => {
+          if (clickedInteractiveElement(event.target)) return
+          onClick?.()
+        }}
+      >
         {/* Repost badge */}
         {repostedBy && (
           <div className="mb-1 flex items-center gap-3 text-sm text-tertiary">

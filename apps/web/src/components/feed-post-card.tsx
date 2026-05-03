@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router"
+import { useQueryClient } from "@tanstack/react-query"
 import { useCallback } from "react"
 import { PostCard } from "@workspace/ui/components/post-card"
 import {
@@ -8,6 +9,7 @@ import {
 } from "../lib/mutations/posts"
 import { api } from "../lib/api"
 import { pickPrimaryMediaUrl } from "../lib/media"
+import { updatePostEverywhere } from "../lib/query-cache"
 import { useCompose } from "./compose-provider"
 import { RichText } from "./rich-text"
 import { ArticleCardBlock } from "./post-card"
@@ -15,6 +17,7 @@ import { GithubCardBlock } from "./github-card"
 import { LinkCardBlock } from "./link-card"
 import { useLightbox } from "./lightbox-provider"
 import { LightboxSidebar } from "./lightbox-sidebar"
+import { PollBlock } from "./poll-block"
 import { XStatusCardBlock } from "./x-status-card"
 import { YoutubeCardBlock } from "./youtube-card"
 import type { Post, PostMedia, UnfurlCard } from "../lib/api"
@@ -103,6 +106,7 @@ export function FeedPostCard({
   truncateText = true,
 }: FeedPostCardProps) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const lightbox = useLightbox()
   const compose = useCompose()
 
@@ -117,6 +121,16 @@ export function FeedPostCard({
   const resolveBruvLikeBurstSrc = useCallback(
     () => (Math.random() < 0.1 ? "/bruv.png" : undefined),
     []
+  )
+
+  const handlePollChange = useCallback(
+    (poll: NonNullable<Post["poll"]>) => {
+      updatePostEverywhere(queryClient, post.id, (current) => ({
+        ...current,
+        poll,
+      }))
+    },
+    [post.id, queryClient]
   )
 
   const quoteOf: PostQuoteOf | undefined = post.quoteOf
@@ -204,6 +218,9 @@ export function FeedPostCard({
               post={outerPost}
             />
           ))}
+          {post.poll && (
+            <PollBlock poll={post.poll} onChange={handlePollChange} />
+          )}
         </>
       }
       onClick={() =>
