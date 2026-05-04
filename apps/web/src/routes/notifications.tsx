@@ -925,11 +925,17 @@ function NotificationRow({ item }: { item: NotificationItem }) {
 
   const containerClass = `block border-b border-neutral px-4 py-3.5 transition-colors hover:bg-base-2/20 ${!item.readAt ? "bg-subtle" : ""}`
 
-  function openActorProfile(e: React.MouseEvent | React.KeyboardEvent) {
-    if (!actorHandle) return
-    e.preventDefault()
-    e.stopPropagation()
-    navigate({ to: "/$handle", params: { handle: actorHandle } })
+  function openRowDestination(e: React.MouseEvent | React.KeyboardEvent) {
+    if (!destination) return
+    if ("target" in e && (e.target as HTMLElement).closest("a")) return
+    navigate({ to: destination })
+  }
+
+  function handleRowKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      openRowDestination(e)
+    }
   }
 
   const content = (
@@ -938,20 +944,15 @@ function NotificationRow({ item }: { item: NotificationItem }) {
         <Icon className={`size-5.5 ${iconClass}`} />
       </div>
       {actorHandle ? (
-        <ProfileHoverCard handle={actorHandle}>
-          <button
-            type="button"
-            onClick={openActorProfile}
-            className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            aria-label={`Open @${actorHandle} profile`}
-          >
+        <Link to="/$handle" params={{ handle: actorHandle }} className="shrink-0">
+          <ProfileHoverCard handle={actorHandle}>
             <Avatar
               initial={actorInitial}
               src={item.actor?.avatarUrl}
               className="size-10"
             />
-          </button>
-        </ProfileHoverCard>
+          </ProfileHoverCard>
+        </Link>
       ) : (
         <Avatar
           initial={actorInitial}
@@ -962,12 +963,8 @@ function NotificationRow({ item }: { item: NotificationItem }) {
       <div className="min-w-0 flex-1 text-sm">
         <p>
           {actorHandle ? (
-            <ProfileHoverCard handle={actorHandle}>
-              <button
-                type="button"
-                onClick={openActorProfile}
-                className="inline-flex cursor-pointer items-center rounded-sm align-middle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
+            <Link to="/$handle" params={{ handle: actorHandle }} className="inline-block">
+              <ProfileHoverCard handle={actorHandle}>
                 <span className="inline-flex items-center gap-1 align-middle font-semibold text-primary">
                   {actorDisplayName || actorHandle || "someone"}
                   {item.actor?.isVerified && (
@@ -975,8 +972,8 @@ function NotificationRow({ item }: { item: NotificationItem }) {
                   )}
                 </span>
                 <span className="text-tertiary"> @{actorHandle}</span>
-              </button>
-            </ProfileHoverCard>
+              </ProfileHoverCard>
+            </Link>
           ) : (
             <span className="inline-flex items-center gap-1 align-middle font-semibold text-primary">
               {actorDisplayName || actorHandle || "someone"}
@@ -1001,9 +998,15 @@ function NotificationRow({ item }: { item: NotificationItem }) {
 
   if (destination) {
     return (
-      <Link to={destination} className={containerClass}>
+      <div
+        role="link"
+        tabIndex={0}
+        onClick={openRowDestination}
+        onKeyDown={handleRowKeyDown}
+        className={`focus-visible:ring-primary cursor-pointer focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset ${containerClass}`}
+      >
         {content}
-      </Link>
+      </div>
     )
   }
 
