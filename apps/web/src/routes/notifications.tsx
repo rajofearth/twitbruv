@@ -850,7 +850,6 @@ function formatShortTime(iso: string): string {
 }
 
 function NotificationRow({ item }: { item: NotificationItem }) {
-  const navigate = useNavigate()
   const Icon = iconForKind(item.kind)
   const iconClass = iconClassForKind(item.kind)
   const verb = verbForKind(item.kind)
@@ -871,20 +870,13 @@ function NotificationRow({ item }: { item: NotificationItem }) {
 
   const containerClass = `block border-b border-neutral px-4 py-3.5 transition-colors hover:bg-base-2/20 ${!item.readAt ? "bg-subtle" : ""}`
 
-  function openActorProfile(e: React.MouseEvent) {
-    if (!actorHandle) return
-    e.preventDefault()
-    e.stopPropagation()
-    navigate({ to: "/$handle", params: { handle: actorHandle } })
-  }
-
   const content = (
     <div className="flex items-start gap-3">
       <div className="flex size-10 shrink-0 items-center justify-center">
         <Icon className={`size-5.5 ${iconClass}`} />
       </div>
       {actorHandle ? (
-        <div onClick={openActorProfile} className="shrink-0">
+        <Link to="/$handle" params={{ handle: actorHandle }} className="shrink-0">
           <ProfileHoverCard handle={actorHandle}>
             <Avatar
               initial={actorInitial}
@@ -892,7 +884,7 @@ function NotificationRow({ item }: { item: NotificationItem }) {
               className="size-10"
             />
           </ProfileHoverCard>
-        </div>
+        </Link>
       ) : (
         <Avatar
           initial={actorInitial}
@@ -903,7 +895,7 @@ function NotificationRow({ item }: { item: NotificationItem }) {
       <div className="min-w-0 flex-1 text-sm">
         <p>
           {actorHandle ? (
-            <span onClick={openActorProfile} className="inline-block">
+            <Link to="/$handle" params={{ handle: actorHandle }} className="inline-block">
               <ProfileHoverCard handle={actorHandle}>
                 <span className="inline-flex items-center gap-1 align-middle font-semibold text-primary">
                   {actorDisplayName || actorHandle || "someone"}
@@ -913,7 +905,7 @@ function NotificationRow({ item }: { item: NotificationItem }) {
                 </span>
                 <span className="text-tertiary"> @{actorHandle}</span>
               </ProfileHoverCard>
-            </span>
+            </Link>
           ) : (
             <span className="inline-flex items-center gap-1 align-middle font-semibold text-primary">
               {actorDisplayName || actorHandle || "someone"}

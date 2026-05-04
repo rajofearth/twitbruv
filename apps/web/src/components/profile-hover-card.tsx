@@ -1,13 +1,14 @@
 import { Link } from "@tanstack/react-router"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Avatar } from "@workspace/ui/components/avatar"
 import { Button } from "@workspace/ui/components/button"
 import { PreviewCard } from "@workspace/ui/components/preview-card"
+import { toast } from "sonner"
 import { api, type PublicProfile } from "../lib/api"
 import { qk } from "../lib/query-keys"
 import { useMe } from "../lib/me"
 import { VerifiedBadge } from "./verified-badge"
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 
 interface ProfileHoverCardProps {
   handle: string
@@ -37,6 +38,8 @@ export function ProfileHoverCard({ handle, children }: ProfileHoverCardProps) {
 
 function ProfileCardInner({ handle }: { handle: string }) {
   const { me } = useMe()
+  const queryClient = useQueryClient()
+  const [isFollowPending, setIsFollowPending] = useState(false)
   const { data: profile, error, isPending } = useQuery({
     queryKey: qk.user(handle),
     queryFn: async (): Promise<PublicProfile> => (await api.user(handle)).user,
@@ -80,11 +83,46 @@ function ProfileCardInner({ handle }: { handle: string }) {
           <Button
             size="sm"
             variant={isFollowing ? "outline" : "primary"}
+            disabled={isFollowPending}
             onClick={async (e) => {
               e.preventDefault()
               e.stopPropagation()
-              if (isFollowing) await api.unfollow(handle)
-              else await api.follow(handle)
+              if (isFollowPending) return
+              setIsFollowPending(true)
+              const shouldFollow = !isFollowing
+              try {
+                if (isFollowing) await api.unfollow(handle)
+                else await api.follow(handle)
+                queryClient.setQueryData<PublicProfile | undefined>(
+                  qk.user(handle),
+                  (current) => {
+                    if (!current) return current
+                    return {
+                      ...current,
+                      viewer: current.viewer
+                        ? { ...current.viewer, following: shouldFollow }
+                        : current.viewer,
+                      counts: {
+                        ...current.counts,
+                        followers: Math.max(
+                          0,
+                          current.counts.followers + (shouldFollow ? 1 : -1)
+                        ),
+                      },
+                    }
+                  }
+                )
+                await queryClient.invalidateQueries({ queryKey: qk.user(handle) })
+              } catch (caught) {
+                console.error("Failed to update follow status", caught)
+                toast.error(
+                  shouldFollow
+                    ? "Could not follow this user. Please try again."
+                    : "Could not unfollow this user. Please try again."
+                )
+              } finally {
+                setIsFollowPending(false)
+              }
             }}
           >
             {isFollowing ? "Following" : "Follow"}
