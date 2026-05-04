@@ -39,6 +39,7 @@ import { usePageHeader } from "../components/app-page-header"
 import { useCompose } from "../components/compose-provider"
 import { PageEmpty } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
+import { ProfileHoverCard } from "../components/profile-hover-card"
 import { VerifiedBadge } from "../components/verified-badge"
 import { RichText } from "../components/rich-text"
 import { useInfiniteScrollSentinel } from "../lib/use-infinite-scroll-sentinel"
@@ -849,6 +850,7 @@ function formatShortTime(iso: string): string {
 }
 
 function NotificationRow({ item }: { item: NotificationItem }) {
+  const navigate = useNavigate()
   const Icon = iconForKind(item.kind)
   const iconClass = iconClassForKind(item.kind)
   const verb = verbForKind(item.kind)
@@ -869,26 +871,56 @@ function NotificationRow({ item }: { item: NotificationItem }) {
 
   const containerClass = `block border-b border-neutral px-4 py-3.5 transition-colors hover:bg-base-2/20 ${!item.readAt ? "bg-subtle" : ""}`
 
+  function openActorProfile(e: React.MouseEvent) {
+    if (!actorHandle) return
+    e.preventDefault()
+    e.stopPropagation()
+    navigate({ to: "/$handle", params: { handle: actorHandle } })
+  }
+
   const content = (
     <div className="flex items-start gap-3">
       <div className="flex size-10 shrink-0 items-center justify-center">
         <Icon className={`size-5.5 ${iconClass}`} />
       </div>
-      <Avatar
-        initial={actorInitial}
-        src={item.actor?.avatarUrl}
-        className="size-10 shrink-0"
-      />
+      {actorHandle ? (
+        <div onClick={openActorProfile} className="shrink-0">
+          <ProfileHoverCard handle={actorHandle}>
+            <Avatar
+              initial={actorInitial}
+              src={item.actor?.avatarUrl}
+              className="size-10"
+            />
+          </ProfileHoverCard>
+        </div>
+      ) : (
+        <Avatar
+          initial={actorInitial}
+          src={item.actor?.avatarUrl}
+          className="size-10 shrink-0"
+        />
+      )}
       <div className="min-w-0 flex-1 text-sm">
         <p>
-          <span className="inline-flex items-center gap-1 align-middle font-semibold text-primary">
-            {actorDisplayName || actorHandle || "someone"}
-            {item.actor?.isVerified && (
-              <VerifiedBadge size={14} role={item.actor.role} />
-            )}
-          </span>
-          {actorHandle && (
-            <span className="text-tertiary"> @{actorHandle}</span>
+          {actorHandle ? (
+            <span onClick={openActorProfile} className="inline-block">
+              <ProfileHoverCard handle={actorHandle}>
+                <span className="inline-flex items-center gap-1 align-middle font-semibold text-primary">
+                  {actorDisplayName || actorHandle || "someone"}
+                  {item.actor?.isVerified && (
+                    <VerifiedBadge size={14} role={item.actor.role} />
+                  )}
+                </span>
+                <span className="text-tertiary"> @{actorHandle}</span>
+              </ProfileHoverCard>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 align-middle font-semibold text-primary">
+              {actorDisplayName || actorHandle || "someone"}
+              {item.actor?.isVerified && (
+                <VerifiedBadge size={14} role={item.actor.role} />
+              )}
+            </span>
           )}
           <span className="text-secondary"> {verb}</span>
           <span className="ml-1.5 text-xs text-tertiary">
