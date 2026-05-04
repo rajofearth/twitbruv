@@ -904,6 +904,7 @@ function formatShortTime(iso: string): string {
 }
 
 function NotificationRow({ item }: { item: NotificationItem }) {
+  const navigate = useNavigate()
   const Icon = iconForKind(item.kind)
   const iconClass = iconClassForKind(item.kind)
   const verb = verbForKind(item.kind)
@@ -924,21 +925,33 @@ function NotificationRow({ item }: { item: NotificationItem }) {
 
   const containerClass = `block border-b border-neutral px-4 py-3.5 transition-colors hover:bg-base-2/20 ${!item.readAt ? "bg-subtle" : ""}`
 
+  function openActorProfile(e: React.MouseEvent | React.KeyboardEvent) {
+    if (!actorHandle) return
+    e.preventDefault()
+    e.stopPropagation()
+    navigate({ to: "/$handle", params: { handle: actorHandle } })
+  }
+
   const content = (
     <div className="flex items-start gap-3">
       <div className="flex size-10 shrink-0 items-center justify-center">
         <Icon className={`size-5.5 ${iconClass}`} />
       </div>
       {actorHandle ? (
-        <Link to="/$handle" params={{ handle: actorHandle }} className="shrink-0">
-          <ProfileHoverCard handle={actorHandle}>
+        <ProfileHoverCard handle={actorHandle}>
+          <button
+            type="button"
+            onClick={openActorProfile}
+            className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            aria-label={`Open @${actorHandle} profile`}
+          >
             <Avatar
               initial={actorInitial}
               src={item.actor?.avatarUrl}
               className="size-10"
             />
-          </ProfileHoverCard>
-        </Link>
+          </button>
+        </ProfileHoverCard>
       ) : (
         <Avatar
           initial={actorInitial}
@@ -949,8 +962,12 @@ function NotificationRow({ item }: { item: NotificationItem }) {
       <div className="min-w-0 flex-1 text-sm">
         <p>
           {actorHandle ? (
-            <Link to="/$handle" params={{ handle: actorHandle }} className="inline-block">
-              <ProfileHoverCard handle={actorHandle}>
+            <ProfileHoverCard handle={actorHandle}>
+              <button
+                type="button"
+                onClick={openActorProfile}
+                className="inline-flex cursor-pointer items-center rounded-sm align-middle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
                 <span className="inline-flex items-center gap-1 align-middle font-semibold text-primary">
                   {actorDisplayName || actorHandle || "someone"}
                   {item.actor?.isVerified && (
@@ -958,8 +975,8 @@ function NotificationRow({ item }: { item: NotificationItem }) {
                   )}
                 </span>
                 <span className="text-tertiary"> @{actorHandle}</span>
-              </ProfileHoverCard>
-            </Link>
+              </button>
+            </ProfileHoverCard>
           ) : (
             <span className="inline-flex items-center gap-1 align-middle font-semibold text-primary">
               {actorDisplayName || actorHandle || "someone"}
