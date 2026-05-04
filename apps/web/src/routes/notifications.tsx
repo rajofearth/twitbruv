@@ -662,79 +662,106 @@ function ReplyRow({ item }: { item: NotificationItem }) {
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={openPost}
-      onKeyDown={handleKeyDown}
-      className={`focus-visible:ring-primary cursor-pointer border-b border-neutral px-4 py-3.5 transition-colors hover:bg-base-2/20 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset ${!item.readAt ? "bg-subtle" : ""}`}
+      className={`border-b border-neutral px-4 py-3.5 transition-colors hover:bg-base-2/20 ${!item.readAt ? "bg-subtle" : ""}`}
     >
       <div className="flex items-start gap-3">
-        <Avatar
-          initial={actorInitial}
-          src={actor?.avatarUrl}
-          className="size-10 shrink-0"
-        />
+        {actorHandle ? (
+          <Link to="/$handle" params={{ handle: actorHandle }} className="shrink-0">
+            <ProfileHoverCard handle={actorHandle}>
+              <Avatar
+                initial={actorInitial}
+                src={actor?.avatarUrl}
+                className="size-10"
+              />
+            </ProfileHoverCard>
+          </Link>
+        ) : (
+          <Avatar
+            initial={actorInitial}
+            src={actor?.avatarUrl}
+            className="size-10 shrink-0"
+          />
+        )}
         <div className="min-w-0 flex-1 text-sm">
           <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 font-semibold text-primary">
-              {actorDisplayName || actorHandle || "someone"}
-              {actor?.isVerified && (
-                <VerifiedBadge size={14} role={actor.role} />
-              )}
-            </span>
-            {actorHandle && (
-              <span className="text-tertiary">@{actorHandle}</span>
+            {actorHandle ? (
+              <Link to="/$handle" params={{ handle: actorHandle }} className="inline-block">
+                <ProfileHoverCard handle={actorHandle}>
+                  <span className="inline-flex items-center gap-1 font-semibold text-primary">
+                    {actorDisplayName || actorHandle || "someone"}
+                    {actor?.isVerified && (
+                      <VerifiedBadge size={14} role={actor.role} />
+                    )}
+                  </span>
+                  <span className="text-tertiary"> @{actorHandle}</span>
+                </ProfileHoverCard>
+              </Link>
+            ) : (
+              <span className="inline-flex items-center gap-1 font-semibold text-primary">
+                {actorDisplayName || actorHandle || "someone"}
+                {actor?.isVerified && (
+                  <VerifiedBadge size={14} role={actor.role} />
+                )}
+              </span>
             )}
             <span className="text-xs text-tertiary">
               · {formatShortTime(item.createdAt)}
             </span>
           </div>
-          {replyToHandles.length > 0 && (
-            <p className="mt-0.5 text-secondary">
-              Replying to{" "}
-              {replyToHandles.slice(0, 2).map((handle, i) => (
-                <span key={handle}>
-                  {i > 0 && ", "}
-                  <span className="text-sky-500">@{handle}</span>
-                </span>
-              ))}
-              {replyToHandles.length > 2 && (
-                <span className="text-secondary">
-                  {" "}
-                  and {replyToHandles.length - 2} other
-                  {replyToHandles.length - 2 !== 1 ? "s" : ""}
-                </span>
-              )}
-            </p>
-          )}
-          {replyTarget?.text && (
-            <p className="mt-0.5 leading-relaxed whitespace-pre-wrap text-primary">
-              <RichText text={replyTarget.text} />
-            </p>
-          )}
           <div
-            className="mt-2 flex items-center"
-            onClick={(e) => e.stopPropagation()}
+            role="button"
+            tabIndex={0}
+            onClick={openPost}
+            onKeyDown={handleKeyDown}
+            className="focus-visible:ring-primary mt-1.5 cursor-pointer rounded-md p-1 -m-1 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
           >
-            <div className="flex-1">
-              <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                <ChatBubbleOutline className="size-4" />
-              </span>
-            </div>
-            <div className="flex-1">
-              <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                <ArrowPathOutline className="size-4" />
-              </span>
-            </div>
-            <div className="flex-1">
-              <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                <HeartOutline className="size-4" />
-              </span>
-            </div>
-            <div>
-              <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                <BookmarkIconOutline className="size-4" />
-              </span>
+            {replyToHandles.length > 0 && (
+              <p className="mt-0.5 text-secondary">
+                Replying to{" "}
+                {replyToHandles.slice(0, 2).map((handle, i) => (
+                  <span key={handle}>
+                    {i > 0 && ", "}
+                    <span className="text-sky-500">@{handle}</span>
+                  </span>
+                ))}
+                {replyToHandles.length > 2 && (
+                  <span className="text-secondary">
+                    {" "}
+                    and {replyToHandles.length - 2} other
+                    {replyToHandles.length - 2 !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </p>
+            )}
+            {replyTarget?.text && (
+              <p className="mt-0.5 leading-relaxed whitespace-pre-wrap text-primary">
+                <RichText text={replyTarget.text} />
+              </p>
+            )}
+            <div
+              className="mt-2 flex items-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex-1">
+                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
+                  <ChatBubbleOutline className="size-4" />
+                </span>
+              </div>
+              <div className="flex-1">
+                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
+                  <ArrowPathOutline className="size-4" />
+                </span>
+              </div>
+              <div className="flex-1">
+                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
+                  <HeartOutline className="size-4" />
+                </span>
+              </div>
+              <div>
+                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
+                  <BookmarkIconOutline className="size-4" />
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -772,61 +799,88 @@ function MentionRow({ item }: { item: NotificationItem }) {
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={openPost}
-      onKeyDown={handleKeyDown}
-      className={`focus-visible:ring-primary cursor-pointer border-b border-neutral px-4 py-3.5 transition-colors hover:bg-base-2/20 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset ${!item.readAt ? "bg-subtle" : ""}`}
+      className={`border-b border-neutral px-4 py-3.5 transition-colors hover:bg-base-2/20 ${!item.readAt ? "bg-subtle" : ""}`}
     >
       <div className="flex items-start gap-3">
-        <Avatar
-          initial={actorInitial}
-          src={actor?.avatarUrl}
-          className="size-10 shrink-0"
-        />
+        {actorHandle ? (
+          <Link to="/$handle" params={{ handle: actorHandle }} className="shrink-0">
+            <ProfileHoverCard handle={actorHandle}>
+              <Avatar
+                initial={actorInitial}
+                src={actor?.avatarUrl}
+                className="size-10"
+              />
+            </ProfileHoverCard>
+          </Link>
+        ) : (
+          <Avatar
+            initial={actorInitial}
+            src={actor?.avatarUrl}
+            className="size-10 shrink-0"
+          />
+        )}
         <div className="min-w-0 flex-1 text-sm">
           <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 font-semibold text-primary">
-              {actorDisplayName || actorHandle || "someone"}
-              {actor?.isVerified && (
-                <VerifiedBadge size={14} role={actor.role} />
-              )}
-            </span>
-            {actorHandle && (
-              <span className="text-tertiary">@{actorHandle}</span>
+            {actorHandle ? (
+              <Link to="/$handle" params={{ handle: actorHandle }} className="inline-block">
+                <ProfileHoverCard handle={actorHandle}>
+                  <span className="inline-flex items-center gap-1 font-semibold text-primary">
+                    {actorDisplayName || actorHandle || "someone"}
+                    {actor?.isVerified && (
+                      <VerifiedBadge size={14} role={actor.role} />
+                    )}
+                  </span>
+                  <span className="text-tertiary"> @{actorHandle}</span>
+                </ProfileHoverCard>
+              </Link>
+            ) : (
+              <span className="inline-flex items-center gap-1 font-semibold text-primary">
+                {actorDisplayName || actorHandle || "someone"}
+                {actor?.isVerified && (
+                  <VerifiedBadge size={14} role={actor.role} />
+                )}
+              </span>
             )}
             <span className="text-xs text-tertiary">
               · {formatShortTime(item.createdAt)}
             </span>
           </div>
-          {mentionTarget?.text && (
-            <p className="mt-0.5 leading-relaxed whitespace-pre-wrap text-primary">
-              <RichText text={mentionTarget.text} />
-            </p>
-          )}
           <div
-            className="mt-2 flex items-center"
-            onClick={(e) => e.stopPropagation()}
+            role="button"
+            tabIndex={0}
+            onClick={openPost}
+            onKeyDown={handleKeyDown}
+            className="focus-visible:ring-primary mt-1.5 cursor-pointer rounded-md p-1 -m-1 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
           >
-            <div className="flex-1">
-              <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                <ChatBubbleOutline className="size-4" />
-              </span>
-            </div>
-            <div className="flex-1">
-              <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                <ArrowPathOutline className="size-4" />
-              </span>
-            </div>
-            <div className="flex-1">
-              <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                <HeartOutline className="size-4" />
-              </span>
-            </div>
-            <div>
-              <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                <BookmarkIconOutline className="size-4" />
-              </span>
+            {mentionTarget?.text && (
+              <p className="mt-0.5 leading-relaxed whitespace-pre-wrap text-primary">
+                <RichText text={mentionTarget.text} />
+              </p>
+            )}
+            <div
+              className="mt-2 flex items-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex-1">
+                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
+                  <ChatBubbleOutline className="size-4" />
+                </span>
+              </div>
+              <div className="flex-1">
+                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
+                  <ArrowPathOutline className="size-4" />
+                </span>
+              </div>
+              <div className="flex-1">
+                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
+                  <HeartOutline className="size-4" />
+                </span>
+              </div>
+              <div>
+                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
+                  <BookmarkIconOutline className="size-4" />
+                </span>
+              </div>
             </div>
           </div>
         </div>
