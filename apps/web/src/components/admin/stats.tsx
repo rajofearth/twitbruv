@@ -16,6 +16,7 @@ import { api } from "../../lib/api"
 import { qk } from "../../lib/query-keys"
 import { PageError } from "../page-surface"
 import { PageFrame } from "../page-frame"
+import { ProfileHoverCard } from "../profile-hover-card"
 
 type Icon = React.ComponentType<{ className?: string }>
 
@@ -270,21 +271,32 @@ function OnlineCard({
                 className="ring-base-1 size-8 shrink-0 rounded-full ring-2"
               />
             ))
-          : sample.slice(0, 12).map((u) => (
-              <span
-                key={u.id}
-                className="inline-flex"
-                title={u.handle ? `@${u.handle}` : (u.displayName ?? undefined)}
-              >
+          : sample.slice(0, 12).map((u) => {
+              const avatar = (
                 <Avatar
                   initial={(u.displayName || u.handle || "?")
                     .slice(0, 1)
                     .toUpperCase()}
                   src={u.avatarUrl}
-                  className="ring-base-1 size-8 shrink-0 ring-2"
+                  className={`ring-base-1 size-8 shrink-0 ring-2 ${
+                    u.handle ? "cursor-pointer" : ""
+                  }`}
                 />
-              </span>
-            ))}
+              )
+              return u.handle ? (
+                <ProfileHoverCard key={u.id} handle={u.handle}>
+                  {avatar}
+                </ProfileHoverCard>
+              ) : (
+                <span
+                  key={u.id}
+                  className="inline-flex"
+                  title={u.displayName ?? undefined}
+                >
+                  {avatar}
+                </span>
+              )
+            })}
       </div>
     </div>
   )
