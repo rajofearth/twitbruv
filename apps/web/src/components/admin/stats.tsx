@@ -210,11 +210,13 @@ function Section({
 function OnlineCard({
   loading,
   error,
+  presenceUnavailable,
   count,
   sample,
 }: {
   loading: boolean
   error?: boolean
+  presenceUnavailable?: boolean
   count: number | undefined
   sample: Array<{
     id: string
@@ -254,6 +256,11 @@ function OnlineCard({
       </div>
       <p className="relative mt-1 shrink-0 text-[11px] text-tertiary">
         Active foreground tabs (heartbeat)
+        {presenceUnavailable && !loading && !error ? (
+          <span className="mt-0.5 block text-amber-600 dark:text-amber-500">
+            Presence store unavailable (check Redis).
+          </span>
+        ) : null}
       </p>
       <div className="relative mt-4 flex min-h-0 flex-1 flex-wrap items-end gap-1">
         {loading
@@ -317,292 +324,317 @@ export default function AdminStats() {
 
   return (
     <PageFrame width="full" className="flex flex-col">
-      <div className="space-y-4 p-4">
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <HeroCard
-            icon={UsersIcon}
-            label="Active users"
-            value={stats?.users.active}
-            accent="sky"
-            delta={stats?.users.newToday}
-            deltaLabel="new today"
-            pending={statsPending}
-          />
-          <OnlineCard
-            loading={onlinePending}
-            error={onlineError}
-            count={online?.count}
-            sample={online?.sample ?? []}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-          <HeroCard
-            icon={ChatBubbleLeftIcon}
-            label="Posts"
-            value={stats?.posts.total}
-            accent="violet"
-            delta={stats?.posts.newToday}
-            deltaLabel="new today"
-            pending={statsPending}
-          />
-          <HeroCard
-            icon={HeartIcon}
-            label="Likes"
-            value={stats?.engagement.likes}
-            accent="rose"
-            delta={stats?.engagement.likesToday}
-            deltaLabel="new today"
-            pending={statsPending}
-          />
-          <HeroCard
-            icon={ArrowPathIcon}
-            label="Reposts"
-            value={stats?.engagement.reposts}
-            accent="emerald"
-            pending={statsPending}
-          />
-          <HeroCard
-            icon={BookmarkIcon}
-            label="Bookmarks"
-            value={stats?.engagement.bookmarks}
-            accent="amber"
-            pending={statsPending}
-          />
-          <HeroCard
-            icon={EyeIcon}
-            label="Impressions"
-            value={stats?.posts.totalImpressions}
-            accent="fuchsia"
-            pending={statsPending}
-          />
-          <HeroCard
-            icon={FlagIcon}
-            label="Open reports"
-            value={stats?.reports.open}
-            accent="amber"
-            pending={statsPending}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2 2xl:grid-cols-3">
-          <Section title="Users" icon={UsersIcon} accent="sky">
-            <MiniStat
-              pending={statsPending}
-              label="Total"
-              value={stats?.users.total}
-            />
-            <MiniStat
-              pending={statsPending}
-              label="Active"
+      <div className="p-4">
+        <div className="grid grid-cols-12 gap-3 lg:gap-4">
+          <div className="col-span-12 min-w-0 lg:col-span-6 [&>*]:w-full">
+            <HeroCard
+              icon={UsersIcon}
+              label="Active users"
               value={stats?.users.active}
-            />
-            <MiniStat
+              accent="sky"
+              delta={stats?.users.newToday}
+              deltaLabel="new today"
               pending={statsPending}
-              label="Verified"
-              value={stats?.users.verified}
             />
-            <MiniStat
-              pending={statsPending}
-              label="Admins"
-              value={stats?.users.admins}
+          </div>
+          <div className="col-span-12 min-w-0 lg:col-span-6 [&>*]:w-full">
+            <OnlineCard
+              loading={onlinePending}
+              error={onlineError}
+              presenceUnavailable={online?.presenceUnavailable}
+              count={online?.count}
+              sample={online?.sample ?? []}
             />
-            <MiniStat
-              pending={statsPending}
-              label="Banned"
-              value={stats?.users.banned}
-              tone="destructive"
-            />
-            <MiniStat
-              pending={statsPending}
-              label="Shadow"
-              value={stats?.users.shadowBanned}
-              tone="warning"
-            />
-            <MiniStat
-              pending={statsPending}
-              label="Deleted"
-              value={stats?.users.deleted}
-              tone="destructive"
-            />
-            <MiniStat
-              pending={statsPending}
-              label="New 24h"
-              value={stats?.users.newToday}
-              tone="positive"
-            />
-            <MiniStat
-              pending={statsPending}
-              label="New 7d"
-              value={stats?.users.newThisWeek}
-              tone="positive"
-            />
-          </Section>
+          </div>
 
-          <Section title="Posts" icon={ChatBubbleLeftIcon} accent="violet">
-            <MiniStat
-              pending={statsPending}
-              label="Total"
+          <div className="col-span-6 min-w-0 md:col-span-4 lg:col-span-2 [&>*]:w-full">
+            <HeroCard
+              icon={ChatBubbleLeftIcon}
+              label="Posts"
               value={stats?.posts.total}
-            />
-            <MiniStat
+              accent="violet"
+              delta={stats?.posts.newToday}
+              deltaLabel="new today"
               pending={statsPending}
-              label="Original"
-              value={stats?.posts.original}
             />
-            <MiniStat
-              pending={statsPending}
-              label="Replies"
-              value={stats?.posts.replies}
-            />
-            <MiniStat
-              pending={statsPending}
-              label="Reposts"
-              value={stats?.posts.reposts}
-            />
-            <MiniStat
-              pending={statsPending}
-              label="Quotes"
-              value={stats?.posts.quotes}
-            />
-            <MiniStat
-              pending={statsPending}
-              label="Edited"
-              value={stats?.posts.edited}
-            />
-            <MiniStat
-              pending={statsPending}
-              label="Sensitive"
-              value={stats?.posts.sensitive}
-              tone="warning"
-            />
-            <MiniStat
-              pending={statsPending}
-              label="Deleted"
-              value={stats?.posts.deleted}
-              tone="destructive"
-            />
-            <MiniStat
-              pending={statsPending}
-              label="New 24h"
-              value={stats?.posts.newToday}
-              tone="positive"
-            />
-            <MiniStat
-              pending={statsPending}
-              label="New 7d"
-              value={stats?.posts.newThisWeek}
-              tone="positive"
-            />
-          </Section>
-
-          <Section title="Engagement" icon={HeartIcon} accent="rose">
-            <MiniStat
-              pending={statsPending}
+          </div>
+          <div className="col-span-6 min-w-0 md:col-span-4 lg:col-span-2 [&>*]:w-full">
+            <HeroCard
+              icon={HeartIcon}
               label="Likes"
               value={stats?.engagement.likes}
-            />
-            <MiniStat
+              accent="rose"
+              delta={stats?.engagement.likesToday}
+              deltaLabel="new today"
               pending={statsPending}
-              label="Likes 24h"
-              value={stats?.engagement.likesToday}
-              tone="positive"
             />
-            <MiniStat
-              pending={statsPending}
-              label="Bookmarks"
-              value={stats?.engagement.bookmarks}
-            />
-            <MiniStat
-              pending={statsPending}
+          </div>
+          <div className="col-span-6 min-w-0 md:col-span-4 lg:col-span-2 [&>*]:w-full">
+            <HeroCard
+              icon={ArrowPathIcon}
               label="Reposts"
               value={stats?.engagement.reposts}
-            />
-            <MiniStat
+              accent="emerald"
               pending={statsPending}
-              label="Quotes"
-              value={stats?.engagement.quotes}
             />
-            <MiniStat
+          </div>
+          <div className="col-span-6 min-w-0 md:col-span-4 lg:col-span-2 [&>*]:w-full">
+            <HeroCard
+              icon={BookmarkIcon}
+              label="Bookmarks"
+              value={stats?.engagement.bookmarks}
+              accent="amber"
               pending={statsPending}
-              label="Replies"
-              value={stats?.engagement.replies}
             />
-          </Section>
-
-          <Section title="Reach" icon={EyeIcon} accent="fuchsia">
-            <MiniStat
-              pending={statsPending}
+          </div>
+          <div className="col-span-6 min-w-0 md:col-span-4 lg:col-span-2 [&>*]:w-full">
+            <HeroCard
+              icon={EyeIcon}
               label="Impressions"
               value={stats?.posts.totalImpressions}
-            />
-            <MiniStat
+              accent="fuchsia"
               pending={statsPending}
-              label="Conversations"
-              value={stats?.messaging.conversations}
             />
-            <MiniStat
-              pending={statsPending}
-              label="Messages"
-              value={stats?.messaging.messages}
-            />
-          </Section>
-
-          <Section title="Social graph" icon={UserGroupIcon} accent="emerald">
-            <MiniStat
-              pending={statsPending}
-              label="Follows"
-              value={stats?.social.follows}
-            />
-            <MiniStat
-              pending={statsPending}
-              label="Follows 24h"
-              value={stats?.social.followsToday}
-              tone="positive"
-            />
-            <MiniStat
-              pending={statsPending}
-              label="Blocks"
-              value={stats?.social.blocks}
-              tone="destructive"
-            />
-            <MiniStat
-              pending={statsPending}
-              label="Mutes"
-              value={stats?.social.mutes}
-              tone="warning"
-            />
-          </Section>
-
-          <Section title="Reports" icon={FlagIcon} accent="amber">
-            <MiniStat
-              pending={statsPending}
-              label="Total"
-              value={stats?.reports.total}
-            />
-            <MiniStat
-              pending={statsPending}
-              label="Open"
+          </div>
+          <div className="col-span-6 min-w-0 md:col-span-4 lg:col-span-2 [&>*]:w-full">
+            <HeroCard
+              icon={FlagIcon}
+              label="Open reports"
               value={stats?.reports.open}
-              tone="warning"
-            />
-            <MiniStat
+              accent="amber"
               pending={statsPending}
-              label="Triaged"
-              value={stats?.reports.triaged}
             />
-            <MiniStat
-              pending={statsPending}
-              label="Actioned"
-              value={stats?.reports.actioned}
-              tone="positive"
-            />
-            <MiniStat
-              pending={statsPending}
-              label="Dismissed"
-              value={stats?.reports.dismissed}
-            />
-          </Section>
+          </div>
+
+          <div className="col-span-12 min-w-0 lg:col-span-6 [&>*]:w-full">
+            <Section title="Users" icon={UsersIcon} accent="sky">
+              <MiniStat
+                pending={statsPending}
+                label="Total"
+                value={stats?.users.total}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Active"
+                value={stats?.users.active}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Verified"
+                value={stats?.users.verified}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Admins"
+                value={stats?.users.admins}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Banned"
+                value={stats?.users.banned}
+                tone="destructive"
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Shadow"
+                value={stats?.users.shadowBanned}
+                tone="warning"
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Deleted"
+                value={stats?.users.deleted}
+                tone="destructive"
+              />
+              <MiniStat
+                pending={statsPending}
+                label="New 24h"
+                value={stats?.users.newToday}
+                tone="positive"
+              />
+              <MiniStat
+                pending={statsPending}
+                label="New 7d"
+                value={stats?.users.newThisWeek}
+                tone="positive"
+              />
+            </Section>
+          </div>
+
+          <div className="col-span-12 min-w-0 lg:col-span-6 [&>*]:w-full">
+            <Section title="Posts" icon={ChatBubbleLeftIcon} accent="violet">
+              <MiniStat
+                pending={statsPending}
+                label="Total"
+                value={stats?.posts.total}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Original"
+                value={stats?.posts.original}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Replies"
+                value={stats?.posts.replies}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Reposts"
+                value={stats?.posts.reposts}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Quotes"
+                value={stats?.posts.quotes}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Edited"
+                value={stats?.posts.edited}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Sensitive"
+                value={stats?.posts.sensitive}
+                tone="warning"
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Deleted"
+                value={stats?.posts.deleted}
+                tone="destructive"
+              />
+              <MiniStat
+                pending={statsPending}
+                label="New 24h"
+                value={stats?.posts.newToday}
+                tone="positive"
+              />
+              <MiniStat
+                pending={statsPending}
+                label="New 7d"
+                value={stats?.posts.newThisWeek}
+                tone="positive"
+              />
+            </Section>
+          </div>
+
+          <div className="col-span-12 min-w-0 lg:col-span-6 [&>*]:w-full">
+            <Section title="Engagement" icon={HeartIcon} accent="rose">
+              <MiniStat
+                pending={statsPending}
+                label="Likes"
+                value={stats?.engagement.likes}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Likes 24h"
+                value={stats?.engagement.likesToday}
+                tone="positive"
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Bookmarks"
+                value={stats?.engagement.bookmarks}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Reposts"
+                value={stats?.engagement.reposts}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Quotes"
+                value={stats?.engagement.quotes}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Replies"
+                value={stats?.engagement.replies}
+              />
+            </Section>
+          </div>
+
+          <div className="col-span-12 min-w-0 lg:col-span-6 [&>*]:w-full">
+            <Section title="Reach" icon={EyeIcon} accent="fuchsia">
+              <MiniStat
+                pending={statsPending}
+                label="Impressions"
+                value={stats?.posts.totalImpressions}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Conversations"
+                value={stats?.messaging.conversations}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Messages"
+                value={stats?.messaging.messages}
+              />
+            </Section>
+          </div>
+
+          <div className="col-span-12 min-w-0 lg:col-span-6 [&>*]:w-full">
+            <Section title="Social graph" icon={UserGroupIcon} accent="emerald">
+              <MiniStat
+                pending={statsPending}
+                label="Follows"
+                value={stats?.social.follows}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Follows 24h"
+                value={stats?.social.followsToday}
+                tone="positive"
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Blocks"
+                value={stats?.social.blocks}
+                tone="destructive"
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Mutes"
+                value={stats?.social.mutes}
+                tone="warning"
+              />
+            </Section>
+          </div>
+
+          <div className="col-span-12 min-w-0 lg:col-span-6 [&>*]:w-full">
+            <Section title="Reports" icon={FlagIcon} accent="amber">
+              <MiniStat
+                pending={statsPending}
+                label="Total"
+                value={stats?.reports.total}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Open"
+                value={stats?.reports.open}
+                tone="warning"
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Triaged"
+                value={stats?.reports.triaged}
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Actioned"
+                value={stats?.reports.actioned}
+                tone="positive"
+              />
+              <MiniStat
+                pending={statsPending}
+                label="Dismissed"
+                value={stats?.reports.dismissed}
+              />
+            </Section>
+          </div>
         </div>
       </div>
     </PageFrame>
