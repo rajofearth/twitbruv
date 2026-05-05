@@ -190,7 +190,7 @@ export default function AdminPosts() {
 
   const posts = useMemo(() => data?.pages.flatMap((p) => p.posts) ?? [], [data])
 
-  const loadError = error instanceof Error ? error.message : "failed to load"
+  const loadError = error ? (error instanceof Error ? error.message : "failed to load") : null
 
   const [busyId, setBusyId] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AdminPost | null>(null)
