@@ -66,16 +66,16 @@ type ActionDialogState =
   | null
 
 const COLUMN_WIDTHS: Record<string, string> = {
-  user: "20%",
-  email: "17%",
-  posts: "6%",
-  followers: "6%",
-  following: "6%",
-  reports: "6%",
-  joined: "9%",
-  role: "8%",
-  status: "14%",
-  actions: "8%",
+  user: "18%",
+  email: "15%",
+  posts: "7%",
+  followers: "9%",
+  following: "9%",
+  reports: "8%",
+  joined: "10%",
+  role: "7%",
+  status: "12%",
+  actions: "5%",
 }
 
 function compactNum(n: number): string {
@@ -117,7 +117,11 @@ export default function AdminUsers() {
 
   const users = useMemo(() => data?.pages.flatMap((p) => p.users) ?? [], [data])
 
-  const loadError = error ? (error instanceof Error ? error.message : "failed to load") : null
+  const loadError = error
+    ? error instanceof Error
+      ? error.message
+      : "failed to load"
+    : null
 
   const [busyId, setBusyId] = useState<string | null>(null)
   const [dialog, setDialog] = useState<ActionDialogState>(null)
@@ -280,11 +284,11 @@ export default function AdminUsers() {
                       variant="transparent"
                       disabled={busyId === u.id}
                       className="-ml-2 h-7 gap-1 text-xs tracking-wider uppercase"
+                      iconRight={<ChevronDownIcon className="size-3" />}
                     />
                   }
                 >
                   {u.role}
-                  <ChevronDownIcon className="size-3" />
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Content align="start">
                   <DropdownMenu.Group>
@@ -871,7 +875,11 @@ function UserDetailSheet({
     enabled: !!userId,
   })
 
-  const sheetErr = error ? (error instanceof Error ? error.message : "failed to load") : null
+  const sheetErr = error
+    ? error instanceof Error
+      ? error.message
+      : "failed to load"
+    : null
 
   const open = !!userId
   const u = detail?.user
