@@ -23,12 +23,6 @@ import {
   HeartIcon,
   UserPlusIcon,
 } from "@heroicons/react/24/solid"
-import {
-  ArrowPathIcon as ArrowPathOutline,
-  BookmarkIcon as BookmarkIconOutline,
-  ChatBubbleOvalLeftIcon as ChatBubbleOutline,
-  HeartIcon as HeartOutline,
-} from "@heroicons/react/24/outline"
 import { Button } from "@workspace/ui/components/button"
 import { Skeleton } from "@workspace/ui/components/skeleton"
 import { Avatar } from "@workspace/ui/components/avatar"
@@ -42,6 +36,7 @@ import { PageFrame } from "../components/page-frame"
 import { ProfileHoverCard } from "../components/profile-hover-card"
 import { VerifiedBadge } from "../components/verified-badge"
 import { RichText } from "../components/rich-text"
+import { PostEngagementBar } from "../components/post-engagement-bar"
 import { useInfiniteScrollSentinel } from "../lib/use-infinite-scroll-sentinel"
 import type { InfiniteData } from "@tanstack/react-query"
 import type { NotificationItem, Post } from "../lib/api"
@@ -510,19 +505,32 @@ function GroupedNotificationRow({ group }: { group: GroupedNotification }) {
 
 function AvatarRow({ items }: { items: Array<NotificationItem> }) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div
+      className="flex items-center gap-1.5"
+      onClick={(event) => event.stopPropagation()}
+    >
       {items.slice(0, 8).map((item) => {
         const initial = (item.actor?.displayName ?? item.actor?.handle ?? "·")
           .slice(0, 1)
           .toUpperCase()
-        return (
-          <Avatar
-            key={item.id}
-            initial={initial}
-            src={item.actor?.avatarUrl}
-            size="md"
-          />
+        const handle = item.actor?.handle
+        const avatar = (
+          <Avatar initial={initial} src={item.actor?.avatarUrl} size="md" />
         )
+        if (handle) {
+          return (
+            <Link
+              key={item.id}
+              to="/$handle"
+              params={{ handle }}
+              className="rounded-full transition hover:opacity-80"
+              aria-label={`View @${handle}`}
+            >
+              {avatar}
+            </Link>
+          )
+        }
+        return <span key={item.id}>{avatar}</span>
       })}
     </div>
   )
@@ -535,20 +543,37 @@ function GroupedLikeRow({
   items: Array<NotificationItem>
   target: Post
 }) {
+  const navigate = useNavigate()
   const lead = items[0]
   const leadDisplayName = lead.actor?.displayName ?? null
   const leadHandle = lead.actor?.handle ?? null
   const isUnread = items.some((n) => !n.readAt)
 
-  const postLink =
-    target.author.handle && target.id
-      ? `/${target.author.handle}/p/${target.id}`
-      : null
+  const canOpenPost = Boolean(target.author.handle && target.id)
+
+  function openPost(e: React.MouseEvent | React.KeyboardEvent) {
+    if ("target" in e && (e.target as HTMLElement).closest("a, button")) return
+    if (!target.author.handle || !target.id) return
+    navigate({
+      to: "/$handle/p/$id",
+      params: { handle: target.author.handle, id: target.id },
+    })
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      openPost(e)
+    }
+  }
 
   return (
-    <Link
-      to={postLink ?? "#"}
-      className={`block border-b border-neutral px-4 py-3.5 transition-colors hover:bg-base-2/20 ${isUnread ? "bg-subtle" : ""}`}
+    <div
+      role={canOpenPost ? "button" : undefined}
+      tabIndex={canOpenPost ? 0 : undefined}
+      onClick={canOpenPost ? openPost : undefined}
+      onKeyDown={canOpenPost ? handleKeyDown : undefined}
+      className={`focus-visible:ring-primary block border-b border-neutral px-4 py-3.5 transition-colors hover:bg-base-2/20 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset ${canOpenPost ? "cursor-pointer" : ""} ${isUnread ? "bg-subtle" : ""}`}
     >
       <div className="flex items-center gap-3">
         <div className="flex size-10 shrink-0 items-center justify-center">
@@ -558,9 +583,20 @@ function GroupedLikeRow({
       </div>
       <div className="mt-2 pl-[52px]">
         <p className="text-sm">
-          <span className="font-semibold text-primary">
-            {leadDisplayName || leadHandle || "someone"}
-          </span>
+          {leadHandle ? (
+            <Link
+              to="/$handle"
+              params={{ handle: leadHandle }}
+              className="font-semibold text-primary hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {leadDisplayName || leadHandle}
+            </Link>
+          ) : (
+            <span className="font-semibold text-primary">
+              {leadDisplayName || "someone"}
+            </span>
+          )}
           {leadHandle && <span className="text-tertiary"> @{leadHandle}</span>}
           <span className="text-secondary">
             {" "}
@@ -574,7 +610,7 @@ function GroupedLikeRow({
           </p>
         )}
       </div>
-    </Link>
+    </div>
   )
 }
 
@@ -622,7 +658,6 @@ function GroupedFollowRow({ items }: { items: Array<NotificationItem> }) {
 }
 
 function ReplyRow({ item }: { item: NotificationItem }) {
-  const navigate = useNavigate()
   const actor = item.actor
   const actorDisplayName = actor?.displayName ?? null
   const actorHandle = actor?.handle ?? null
@@ -631,7 +666,6 @@ function ReplyRow({ item }: { item: NotificationItem }) {
     .toUpperCase()
   const replyTarget = item.target
 
-  // Use chain handles if available, otherwise fall back to single parent handle
   const chainHandles = replyTarget?.replyChainHandles ?? []
   const fallbackHandle = replyTarget?.replyToId
     ? (replyTarget.replyParent?.author.handle ?? null)
@@ -643,22 +677,13 @@ function ReplyRow({ item }: { item: NotificationItem }) {
         ? [fallbackHandle]
         : []
 
-  function openPost(e: React.MouseEvent | React.KeyboardEvent) {
-    // Don't navigate if click originated from a link (e.g., @mention in RichText)
-    if ("target" in e && (e.target as HTMLElement).closest("a")) return
-    if (!replyTarget?.author.handle || !replyTarget.id) return
-    navigate({
-      to: "/$handle/p/$id",
-      params: { handle: replyTarget.author.handle, id: replyTarget.id },
-    })
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault()
-      openPost(e)
-    }
-  }
+  const avatarEl = (
+    <Avatar
+      initial={actorInitial}
+      src={actor?.avatarUrl}
+      className="size-10 shrink-0"
+    />
+  )
 
   return (
     <div
@@ -666,104 +691,80 @@ function ReplyRow({ item }: { item: NotificationItem }) {
     >
       <div className="flex items-start gap-3">
         {actorHandle ? (
-          <Link to="/$handle" params={{ handle: actorHandle }} className="shrink-0">
-            <ProfileHoverCard handle={actorHandle}>
-              <Avatar
-                initial={actorInitial}
-                src={actor?.avatarUrl}
-                className="size-10"
-              />
-            </ProfileHoverCard>
-          </Link>
+          <ProfileHoverCard handle={actorHandle}>
+            <Link
+              to="/$handle"
+              params={{ handle: actorHandle }}
+              className="shrink-0 rounded-full transition hover:opacity-80"
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`View @${actorHandle}`}
+            >
+              {avatarEl}
+            </Link>
+          </ProfileHoverCard>
         ) : (
-          <Avatar
-            initial={actorInitial}
-            src={actor?.avatarUrl}
-            className="size-10 shrink-0"
-          />
+          avatarEl
         )}
         <div className="min-w-0 flex-1 text-sm">
           <div className="flex items-center gap-1.5">
             {actorHandle ? (
-              <Link to="/$handle" params={{ handle: actorHandle }} className="inline-block">
-                <ProfileHoverCard handle={actorHandle}>
-                  <span className="inline-flex items-center gap-1 font-semibold text-primary">
-                    {actorDisplayName || actorHandle || "someone"}
-                    {actor?.isVerified && (
-                      <VerifiedBadge size={14} role={actor.role} />
-                    )}
-                  </span>
-                  <span className="text-tertiary"> @{actorHandle}</span>
-                </ProfileHoverCard>
-              </Link>
+              <ProfileHoverCard handle={actorHandle}>
+                <Link
+                  to="/$handle"
+                  params={{ handle: actorHandle }}
+                  className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {actorDisplayName || actorHandle}
+                  {actor?.isVerified && (
+                    <VerifiedBadge size={14} role={actor.role} />
+                  )}
+                </Link>
+              </ProfileHoverCard>
             ) : (
               <span className="inline-flex items-center gap-1 font-semibold text-primary">
-                {actorDisplayName || actorHandle || "someone"}
+                {actorDisplayName || "someone"}
                 {actor?.isVerified && (
                   <VerifiedBadge size={14} role={actor.role} />
                 )}
               </span>
             )}
+            {actorHandle && <span className="text-tertiary">@{actorHandle}</span>}
             <span className="text-xs text-tertiary">
               · {formatShortTime(item.createdAt)}
             </span>
           </div>
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={openPost}
-            onKeyDown={handleKeyDown}
-            className="focus-visible:ring-primary mt-1.5 cursor-pointer rounded-md p-1 -m-1 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
-          >
-            {replyToHandles.length > 0 && (
-              <p className="mt-0.5 text-secondary">
-                Replying to{" "}
-                {replyToHandles.slice(0, 2).map((handle, i) => (
-                  <span key={handle}>
-                    {i > 0 && ", "}
-                    <span className="text-sky-500">@{handle}</span>
-                  </span>
-                ))}
-                {replyToHandles.length > 2 && (
-                  <span className="text-secondary">
-                    {" "}
-                    and {replyToHandles.length - 2} other
-                    {replyToHandles.length - 2 !== 1 ? "s" : ""}
-                  </span>
-                )}
-              </p>
-            )}
-            {replyTarget?.text && (
-              <p className="mt-0.5 leading-relaxed whitespace-pre-wrap text-primary">
-                <RichText text={replyTarget.text} />
-              </p>
-            )}
-            <div
-              className="mt-2 flex items-center"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex-1">
-                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                  <ChatBubbleOutline className="size-4" />
+          {replyToHandles.length > 0 && (
+            <p className="mt-0.5 text-secondary">
+              Replying to{" "}
+              {replyToHandles.slice(0, 2).map((handle, i) => (
+                <span key={handle}>
+                  {i > 0 && ", "}
+                  <Link
+                    to="/$handle"
+                    params={{ handle }}
+                    className="text-sky-500 hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    @{handle}
+                  </Link>
                 </span>
-              </div>
-              <div className="flex-1">
-                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                  <ArrowPathOutline className="size-4" />
+              ))}
+              {replyToHandles.length > 2 && (
+                <span className="text-secondary">
+                  {" "}
+                  and {replyToHandles.length - 2} other
+                  {replyToHandles.length - 2 !== 1 ? "s" : ""}
                 </span>
-              </div>
-              <div className="flex-1">
-                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                  <HeartOutline className="size-4" />
-                </span>
-              </div>
-              <div>
-                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                  <BookmarkIconOutline className="size-4" />
-                </span>
-              </div>
-            </div>
-          </div>
+              )}
+            </p>
+          )}
+          {replyTarget?.text && (
+            <p className="mt-0.5 leading-relaxed whitespace-pre-wrap text-primary">
+              <RichText text={replyTarget.text} />
+            </p>
+          )}
+          {replyTarget && <PostEngagementBar post={replyTarget} />}
         </div>
       </div>
     </div>
@@ -771,7 +772,6 @@ function ReplyRow({ item }: { item: NotificationItem }) {
 }
 
 function MentionRow({ item }: { item: NotificationItem }) {
-  const navigate = useNavigate()
   const actor = item.actor
   const actorDisplayName = actor?.displayName ?? null
   const actorHandle = actor?.handle ?? null
@@ -780,22 +780,13 @@ function MentionRow({ item }: { item: NotificationItem }) {
     .toUpperCase()
   const mentionTarget = item.target
 
-  function openPost(e: React.MouseEvent | React.KeyboardEvent) {
-    // Don't navigate if click originated from a link (e.g., @mention in RichText)
-    if ("target" in e && (e.target as HTMLElement).closest("a")) return
-    if (!mentionTarget?.author.handle || !mentionTarget.id) return
-    navigate({
-      to: "/$handle/p/$id",
-      params: { handle: mentionTarget.author.handle, id: mentionTarget.id },
-    })
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault()
-      openPost(e)
-    }
-  }
+  const avatarEl = (
+    <Avatar
+      initial={actorInitial}
+      src={actor?.avatarUrl}
+      className="size-10 shrink-0"
+    />
+  )
 
   return (
     <div
@@ -803,86 +794,57 @@ function MentionRow({ item }: { item: NotificationItem }) {
     >
       <div className="flex items-start gap-3">
         {actorHandle ? (
-          <Link to="/$handle" params={{ handle: actorHandle }} className="shrink-0">
-            <ProfileHoverCard handle={actorHandle}>
-              <Avatar
-                initial={actorInitial}
-                src={actor?.avatarUrl}
-                className="size-10"
-              />
-            </ProfileHoverCard>
-          </Link>
+          <ProfileHoverCard handle={actorHandle}>
+            <Link
+              to="/$handle"
+              params={{ handle: actorHandle }}
+              className="shrink-0 rounded-full transition hover:opacity-80"
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`View @${actorHandle}`}
+            >
+              {avatarEl}
+            </Link>
+          </ProfileHoverCard>
         ) : (
-          <Avatar
-            initial={actorInitial}
-            src={actor?.avatarUrl}
-            className="size-10 shrink-0"
-          />
+          avatarEl
         )}
         <div className="min-w-0 flex-1 text-sm">
           <div className="flex items-center gap-1.5">
             {actorHandle ? (
-              <Link to="/$handle" params={{ handle: actorHandle }} className="inline-block">
-                <ProfileHoverCard handle={actorHandle}>
-                  <span className="inline-flex items-center gap-1 font-semibold text-primary">
-                    {actorDisplayName || actorHandle || "someone"}
-                    {actor?.isVerified && (
-                      <VerifiedBadge size={14} role={actor.role} />
-                    )}
-                  </span>
-                  <span className="text-tertiary"> @{actorHandle}</span>
-                </ProfileHoverCard>
-              </Link>
+              <ProfileHoverCard handle={actorHandle}>
+                <Link
+                  to="/$handle"
+                  params={{ handle: actorHandle }}
+                  className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {actorDisplayName || actorHandle}
+                  {actor?.isVerified && (
+                    <VerifiedBadge size={14} role={actor.role} />
+                  )}
+                </Link>
+              </ProfileHoverCard>
             ) : (
               <span className="inline-flex items-center gap-1 font-semibold text-primary">
-                {actorDisplayName || actorHandle || "someone"}
+                {actorDisplayName || "someone"}
                 {actor?.isVerified && (
                   <VerifiedBadge size={14} role={actor.role} />
                 )}
               </span>
             )}
+            {actorHandle && (
+              <span className="text-tertiary">@{actorHandle}</span>
+            )}
             <span className="text-xs text-tertiary">
               · {formatShortTime(item.createdAt)}
             </span>
           </div>
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={openPost}
-            onKeyDown={handleKeyDown}
-            className="focus-visible:ring-primary mt-1.5 cursor-pointer rounded-md p-1 -m-1 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset"
-          >
-            {mentionTarget?.text && (
-              <p className="mt-0.5 leading-relaxed whitespace-pre-wrap text-primary">
-                <RichText text={mentionTarget.text} />
-              </p>
-            )}
-            <div
-              className="mt-2 flex items-center"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex-1">
-                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                  <ChatBubbleOutline className="size-4" />
-                </span>
-              </div>
-              <div className="flex-1">
-                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                  <ArrowPathOutline className="size-4" />
-                </span>
-              </div>
-              <div className="flex-1">
-                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                  <HeartOutline className="size-4" />
-                </span>
-              </div>
-              <div>
-                <span className="inline-flex size-7 items-center justify-center rounded-full text-tertiary">
-                  <BookmarkIconOutline className="size-4" />
-                </span>
-              </div>
-            </div>
-          </div>
+          {mentionTarget?.text && (
+            <p className="mt-0.5 leading-relaxed whitespace-pre-wrap text-primary">
+              <RichText text={mentionTarget.text} />
+            </p>
+          )}
+          {mentionTarget && <PostEngagementBar post={mentionTarget} />}
         </div>
       </div>
     </div>
@@ -914,103 +876,110 @@ function NotificationRow({ item }: { item: NotificationItem }) {
     .slice(0, 1)
     .toUpperCase()
 
-  // For follow notifications, link to the actor's profile
-  // For other notifications with a target post, link to the post
-  const destination =
-    item.kind === "follow" && actorHandle
-      ? `/${actorHandle}`
-      : item.target?.author.handle && item.target.id
-        ? `/${item.target.author.handle}/p/${item.target.id}`
-        : null
+  const targetHandle = item.target?.author.handle ?? null
+  const targetId = item.target?.id ?? null
 
-  const containerClass = `block border-b border-neutral px-4 py-3.5 transition-colors hover:bg-base-2/20 ${!item.readAt ? "bg-subtle" : ""}`
+  const canOpen =
+    (item.kind === "follow" && Boolean(actorHandle)) ||
+    Boolean(targetHandle && targetId)
 
-  function openRowDestination(e: React.MouseEvent | React.KeyboardEvent) {
-    if (!destination) return
-    if ("target" in e && (e.target as HTMLElement).closest("a")) return
-    navigate({ to: destination })
+  function openRow(e: React.MouseEvent | React.KeyboardEvent) {
+    if ("target" in e && (e.target as HTMLElement).closest("a, button")) return
+    if (item.kind === "follow") {
+      if (!actorHandle) return
+      navigate({ to: "/$handle", params: { handle: actorHandle } })
+      return
+    }
+    if (!targetHandle || !targetId) return
+    navigate({
+      to: "/$handle/p/$id",
+      params: { handle: targetHandle, id: targetId },
+    })
   }
 
-  function handleRowKeyDown(e: React.KeyboardEvent) {
+  function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault()
-      openRowDestination(e)
+      openRow(e)
     }
   }
 
-  const content = (
-    <div className="flex items-start gap-3">
-      <div className="flex size-10 shrink-0 items-center justify-center">
-        <Icon className={`size-5.5 ${iconClass}`} />
-      </div>
-      {actorHandle ? (
-        <Link to="/$handle" params={{ handle: actorHandle }} className="shrink-0">
+  const avatarEl = (
+    <Avatar
+      initial={actorInitial}
+      src={item.actor?.avatarUrl}
+      className="size-10 shrink-0"
+    />
+  )
+
+  return (
+    <div
+      role={canOpen ? "button" : undefined}
+      tabIndex={canOpen ? 0 : undefined}
+      onClick={canOpen ? openRow : undefined}
+      onKeyDown={canOpen ? handleKeyDown : undefined}
+      className={`focus-visible:ring-primary block border-b border-neutral px-4 py-3.5 transition-colors hover:bg-base-2/20 focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset ${canOpen ? "cursor-pointer" : ""} ${!item.readAt ? "bg-subtle" : ""}`}
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex size-10 shrink-0 items-center justify-center">
+          <Icon className={`size-5.5 ${iconClass}`} />
+        </div>
+        {actorHandle ? (
           <ProfileHoverCard handle={actorHandle}>
-            <Avatar
-              initial={actorInitial}
-              src={item.actor?.avatarUrl}
-              className="size-10"
-            />
+            <Link
+              to="/$handle"
+              params={{ handle: actorHandle }}
+              className="shrink-0 rounded-full transition hover:opacity-80"
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`View @${actorHandle}`}
+            >
+              {avatarEl}
+            </Link>
           </ProfileHoverCard>
-        </Link>
-      ) : (
-        <Avatar
-          initial={actorInitial}
-          src={item.actor?.avatarUrl}
-          className="size-10 shrink-0"
-        />
-      )}
-      <div className="min-w-0 flex-1 text-sm">
-        <p>
-          {actorHandle ? (
-            <Link to="/$handle" params={{ handle: actorHandle }} className="inline-block">
+        ) : (
+          avatarEl
+        )}
+        <div className="min-w-0 flex-1 text-sm">
+          <p>
+            {actorHandle ? (
               <ProfileHoverCard handle={actorHandle}>
-                <span className="inline-flex items-center gap-1 align-middle font-semibold text-primary">
-                  {actorDisplayName || actorHandle || "someone"}
+                <Link
+                  to="/$handle"
+                  params={{ handle: actorHandle }}
+                  className="inline-flex items-center gap-1 align-middle font-semibold text-primary hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {actorDisplayName || actorHandle}
                   {item.actor?.isVerified && (
                     <VerifiedBadge size={14} role={item.actor.role} />
                   )}
-                </span>
-                <span className="text-tertiary"> @{actorHandle}</span>
+                </Link>
               </ProfileHoverCard>
-            </Link>
-          ) : (
-            <span className="inline-flex items-center gap-1 align-middle font-semibold text-primary">
-              {actorDisplayName || actorHandle || "someone"}
-              {item.actor?.isVerified && (
-                <VerifiedBadge size={14} role={item.actor.role} />
-              )}
+            ) : (
+              <span className="inline-flex items-center gap-1 align-middle font-semibold text-primary">
+                {actorDisplayName || "someone"}
+                {item.actor?.isVerified && (
+                  <VerifiedBadge size={14} role={item.actor.role} />
+                )}
+              </span>
+            )}
+            {actorHandle && (
+              <span className="text-tertiary"> @{actorHandle}</span>
+            )}
+            <span className="text-secondary"> {verb}</span>
+            <span className="ml-1.5 text-xs text-tertiary">
+              · {formatShortTime(item.createdAt)}
             </span>
-          )}
-          <span className="text-secondary"> {verb}</span>
-          <span className="ml-1.5 text-xs text-tertiary">
-            · {formatShortTime(item.createdAt)}
-          </span>
-        </p>
-        {item.target?.text && (
-          <p className="mt-1 line-clamp-1 text-sm text-tertiary">
-            {item.target.text}
           </p>
-        )}
+          {item.target?.text && (
+            <p className="mt-1 line-clamp-1 text-sm text-tertiary">
+              {item.target.text}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   )
-
-  if (destination) {
-    return (
-      <div
-        role="link"
-        tabIndex={0}
-        onClick={openRowDestination}
-        onKeyDown={handleRowKeyDown}
-        className={`focus-visible:ring-primary cursor-pointer focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset ${containerClass}`}
-      >
-        {content}
-      </div>
-    )
-  }
-
-  return <div className={containerClass}>{content}</div>
 }
 
 function iconForKind(kind: NotificationItem["kind"]) {
